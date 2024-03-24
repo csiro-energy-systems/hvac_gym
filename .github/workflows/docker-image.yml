@@ -1,0 +1,46 @@
+# For PRs, build the docker container, run tests, coverage and build doc and wheel.
+name: Docker Unit Tests
+on: [ pull_request ]
+
+env:
+  # Make sure these secrets are set in this git repo or organisation settings:
+  # Private package index credentials, for installing and publishing to the private pypi index (see readme)
+  PUBLISH_URL: ${{secrets.PRIVATE_PYPI_PUBLISH_URL}}
+  PUBLISH_USER: ${{secrets.PRIVATE_PYPI_PUBLISH_USER}}
+  PUBLISH_PASSWORD: ${{secrets.PRIVATE_PYPI_PUBLISH_PASSWORD}}
+
+jobs:
+  test:
+    timeout-minutes: 30
+
+    runs-on: ubuntu-latest
+    steps:
+
+      - uses: actions/checkout@v2
+
+      # Manual Large File System fetch - workaround for github bug: https://github.com/actions/checkout/issues/270
+      # Enable this if you have LFS-tracked files that are needed for tests
+#      - name: Fetch large files from lfs
+#        run: |
+#          git lfs checkout
+
+      # Set up github actions docker layer caching, might speed up slow builds
+      - uses: docker/setup-buildx-action@v1
+      - uses: docker/build-push-action@v2
+        with:
+          context: .
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Add env vars to .env file, e.g. for accessing private pypi repo
+      - name: Create .env file
+        run: |
+          echo "PUBLISH_URL=${{ env.PUBLISH_URL }}" >> .env
+          echo "PUBLISH_USER=${{ env.PUBLISH_USER }}" >> .env
+          echo "PUBLISH_PASSWORD=${{ env.PUBLISH_PASSWORD }}" >> .env
+
+      - name: Docker-compose build
+        run: docker-compose build
+
+      - name: Test, Coverage, Docs
+        run: docker-compose run test

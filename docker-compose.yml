@@ -1,0 +1,44 @@
+# Builds a single image from our source code, and creates two containers, one for deployment, the other for running unit tests.
+
+# To build and run:
+#     docker-compose build
+# To run for testing:
+#     docker-compose up
+# To run in the background (detached):
+#     docker-compose up -d
+# To Troubleshoot:
+#     docker-compose run --entrypoint /bin/bash --rm hvac_gym
+
+version: '3.9'
+
+services:
+
+  run:
+    image: hvac_gym
+    environment:
+      TZ: "Australia/Sydney" # Set the container's timezone, otherwise it defaults to UTC
+    env_file:
+      - .env
+    build:
+      context: .
+      args: # pass env vars to docker build
+        PROJECT_NAME: hvac_gym
+        PUBLISH_URL: ${PUBLISH_URL}
+        PUBLISH_USER: ${PUBLISH_USER}
+        PUBLISH_PASSWORD: ${PUBLISH_PASSWORD}
+    restart: 'no'
+    entrypoint: poetry run poe run
+    volumes:
+      - ./data:/usr/src/app/hvac_gym/data
+      - ./output:/usr/src/app/hvac_gym/output
+      - ./src/config:/usr/src/app/hvac_gym/config
+
+  test:
+    image: hvac_gym
+    entrypoint: poetry run poe test
+    restart: 'no'
+    # Mount local data and output dirs into container
+    volumes:
+      - ./data:/usr/src/app/hvac_gym/data
+      - ./output:/usr/src/app/hvac_gym/output
+      - ./src/config:/usr/src/app/hvac_gym/config
