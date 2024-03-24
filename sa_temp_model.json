@@ -1,0 +1,69 @@
+{
+    "target": {
+        "name": "ahu_sa_temp",
+        "path": [
+            "AHU hasPoint Supply_Air_Temperature_Sensor"
+        ],
+        "desc": null
+    },
+    "inputs": [
+        {
+            "name": "ahu_ra_temp",
+            "path": [
+                "AHU hasPoint Return_Air_Temperature_Sensor",
+                "AHU isFedBy Return_Air_Plenum hasPoint Return_Air_Temperature_Sensor"
+            ],
+            "desc": null
+        },
+        {
+            "name": "ahu_chw_valve_sp",
+            "path": [
+                "AHU hasPart Chilled_Water_Coil feeds Chilled_Water_Valve hasPoint Valve_Position_Sensor"
+            ],
+            "desc": null
+        },
+        {
+            "name": "ahu_hw_valve_sp",
+            "path": [
+                "AHU hasPart Hot_Water_Coil feeds Hot_Water_Valve hasPoint Valve_Position_Sensor"
+            ],
+            "desc": null
+        },
+        {
+            "name": "ahu_sa_fan_speed_sp",
+            "path": [
+                "AHU hasPart Supply_Fan hasPoint Speed_Setpoint"
+            ],
+            "desc": null
+        },
+        {
+            "name": "ahu_oa_damper",
+            "path": [
+                "AHU hasPart Outside_Damper hasPoint Damper_Position_Sensor"
+            ],
+            "desc": null
+        },
+        {
+            "name": "oa_temp",
+            "path": [
+                "Outside_Air_Temperature_Sensor"
+            ],
+            "desc": "All outside air temperature sensors"
+        }
+    ],
+    "derived_inputs": [],
+    "horizon_mins": 0,
+    "lags": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+    ],
+    "lag_target": false
+}

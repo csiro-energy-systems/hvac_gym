@@ -1,0 +1,199 @@
+[tool.poetry]
+name = "hvac_gym"
+version = "0.1.0"
+description = "Automated modelling of building HVAC and creation of reinforcement learning gym environments"
+authors = ["Sam West <sam.west@csiro.au>"]
+
+packages = [
+    { include = "hvac_gym/**/*", from = "src" }, # need to specify the packages for `poetry build` to include
+]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.13"
+loguru = ">=0.5.3"
+virtualenv = ">=20.24.2"
+pydantic = "^2.6.3"
+dch-interface = {path = "../dch-interface-py", develop = true}
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^6.2.3"
+Sphinx = "^4.2.0"
+sphinx-rtd-theme = "^1.0.0"
+myst-parser = "^0.15.2"
+rst-to-myst = { extras = ["sphinx"], version = "^0.3.2" }
+coverage = "^5.5"
+pip-licenses = "^3.5.2"
+pylint = "^2.11.1"
+pre-commit = "^2.19.0"
+pyproject-flake8 = "^0.0.1-alpha.4"
+pytest-cov = "^3.0.0"
+poethepoet = "^0.20.0"
+mypy = "^1.6.0"
+ruff = "^0.1.0"
+black = "^23.9.1"
+nbmake = "^1.4.6"
+pytest-timeout = "^2.2.0"
+liccheck = {git = "https://github.com/dhatim/python-license-check"}
+
+[build-system]
+requires = ["setuptools", "poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+# Scripts for the main entrypoints of the package.
+# These will be installed into the virtualenv's bin/ directory and run with `poetry run example_script`.
+# These also allow you to `pipx install` this project in a sandbox
+[tool.poetry.scripts]
+example_script = "hvac_gym.example:run()"
+
+# Automation of common build tasks etc.  Run with: `poe <target>`, eg. `poe clean`.
+# See https://github.com/nat-n/poethepoet for details.
+[tool.poe.tasks]
+run = { cmd = "poetry run python src/hvac_gym/example.py", help = "Run the project" }
+clean = { shell = "rm -rf .coverage .mypy_cache .pytest_cache dist ./**/__pycache__ docs/build/ dist docs/build docs/source/_static docs/source/wpf.*.rst", help = "Clean up build artifacts", interpreter = "posix" }
+clean_outputs = { shell = "rm -rf output/ results/", help = "Cleans output dirs: output/ & results/", interpreter = "posix" }
+precommit = { cmd = "poetry run pre-commit run", help = "Run pre-commit hooks" }
+lint = { cmd = "poetry run git add .pre-commit-config.yaml & pre-commit run", help = "Run pre-commit hooks" }
+test = { cmd = "poetry run pytest --cov-report html --cov-report term-missing --cov=src/ ", help = "Run unit tests with pytest" }
+publish = { cmd = "poetry publish --build --remote csiroenergy", help = "Publish the package to private pypi repo" }
+docker_build = { cmd = "docker-compose build", help = "Build the docker-compose images" }
+docker_run = { cmd = "docker-compose run run", help = "Run the main docker-compose container" }
+docker_test = { cmd = "docker-compose run test", help = "Run the test docker-compose container" }
+doc.sequence = ["_doc_dir", "_pyreverse", "_apidoc", "_sphinx", "show_doc"]
+doc.help = "Build the documentation"
+show_doc = { expr = "webbrowser.open('file://' + str(pathlib.Path('docs/build/index.html').resolve()))", imports = ["webbrowser", "pathlib"], help = "Open the documentation in a browser (experimental)." }
+
+# Internal tasks used by other tasks, not callable directly
+_doc_dir = { script = "os:makedirs('docs/source/_static', exist_ok=True)" }
+_pyreverse = { cmd = "pyreverse --output-directory docs/source/_static/ --output html src/hvac_gym" } # FIXME `--output png` for UML diagrams only works if native graphviz is installed
+_licenses = { cmd = "pip-licenses -f md --output-file docs/source/licenses.md" }
+_apidoc = { cmd = "sphinx-apidoc -f -o docs/source/ src/" }
+_sphinx = { cmd = "sphinx-build -b html docs/source docs/build" }
+
+
+# Config for various pre-commit checks are below
+# Ruff linting rules - see https://github.com/charliermarsh/ruff and https://beta.ruff.rs/docs/rules/
+[tool.ruff]
+target-version = "py39"
+line-length = 150
+
+# Option 1: use basic rules only.
+select = [
+    "E", # pycodestyle errors
+    "W", # pycodestyle warnings
+    "F", # pyflakes
+    "UP", # pyupgrade
+    "N", # pep8 naming
+    "I", # isort
+    "TID", # tidy imports
+    "UP", # pyupgrade
+    "PD", # pandas style
+    "NPY", # numpy style
+    "C90", # code complexity
+    #    "PL", # pylint
+]
+
+# Add specific rule codes/groups here to ignore them, or add a '#noqa' comment to the line of code to skip all checks.
+ignore = [
+    "PLR", # complexity rules
+]
+
+# Ruff rule-specific options:
+[tool.ruff.lint.mccabe]
+max-complexity = 12 # increase max function 'complexity'
+
+[tool.ruff.lint.pep8-naming]
+# Allow Pydantic's `@validator` decorator to trigger class method treatment.
+classmethod-decorators = ["classmethod", "field_validator"]
+
+[tool.mypy]
+# Static type-checking. Debug with `pre-commit run mypy`.
+# This config will only enforce typing if you choose to add type annotations. It will ignore code without any annotations.
+# Cheat sheet: https://mypy.readthedocs.io/en/stable/cheat_sheet_py3.html
+# Good guide: https://breadcrumbscollector.tech/mypy-how-to-use-it-in-my-project/
+
+# SET TO FALSE TO ENABLE MYPY
+# 'false' enables basic checks on optional type hints
+ignore_errors = false
+
+warn_unused_configs = true
+ignore_missing_imports = true
+pretty = false
+exclude = "src/tests/**/*.py"
+files = ["src/**/*.py"]
+implicit_reexport = true
+
+# Uncomment to enable more checks - forcing type hints to be used everywhere.
+strict_optional = true
+warn_unused_ignores = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+warn_return_any = true
+warn_unreachable = true
+warn_redundant_casts = true
+
+# these options are quite restrictive, disabled
+disallow_any_generics = true
+no_implicit_reexport = true
+
+# See https://bandit.readthedocs.io/en/latest/man/bandit.html?highlight=recursive#options and https://bandit.readthedocs.io/en/latest/config.html?highlight=pyproject.toml#bandit-settings
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "scripts"]
+skips = ["B101", "B301", "B403", "B404", "B501"]
+exclude = ["*_test.py", "test_*.py"]
+
+# Checks that no 'viral' licensed libraries are in use.
+[tool.liccheck]
+authorized_licenses = [
+    "bsd",
+    "new bsd",
+    "bsd license",
+    "new bsd license",
+    "simplified bsd",
+    "apache",
+    "apache 2.0",
+    "apache software license",
+    "apache software",
+    "gnu lgpl",
+    "lgpl with exceptions or zpl",
+    "isc license",
+    "isc license (iscl)",
+    "mit",
+    "mit license",
+    "python software foundation license",
+    "zpl 2.1",
+    "Mozilla Public License 2.0 (MPL 2.0)",
+    "The Unlicense (Unlicense)",
+    "Python Software Foundation",
+    "BSD 3-Clause",
+    "Historical Permission Notice and Disclaimer (HPND)",
+    "W3C",
+]
+unauthorized_licenses = [
+    "gpl",
+    "gpl v2",
+    "gpl v3",
+]
+level = "STANDARD"
+reporting_txt_file = "docs/source/license-check.txt"
+dependencies = true # to load [project.dependencies]
+
+
+[tool.liccheck.authorized_packages]
+uuid = 1.30
+
+# see https://docs.pytest.org/en/6.2.x/customize.html and https://docs.pytest.org/en/6.2.x/reference.html#ini-options-ref
+[tool.pytest.ini_options]
+filterwarnings = ["ignore::DeprecationWarning"]
+# default pytest args for coverage report to console+html (cov-report), reporting long-running tests (durations-min), native stacktraces (tb=native), and jupyer notebook running (nbmake)
+addopts = '-s --cov-report term-missing --durations=0 --durations-min=5.0 --tb=native --timeout=300 --nbmake --nbmake-timeout=5000 src/'
+
+
+# Add our private package index. Add via this command in poetry >=1.2: `poetry source add --secondary csiroenergy https://pkgs.dev.azure.com/csiro-energy/csiro-energy/_packaging/csiro-python-packages/pypi/simple/`
+# If uncommenting this block, you also need to generate a token at https://dev.azure.com/csiro-energy/_usersSettings/tokens and run these commands for authentication:
+#   poetry config repositories.csiroenergy https://pkgs.dev.azure.com/csiro-energy/csiro-energy/_packaging/csiro-python-packages/pypi/upload
+#   poetry config http-basic.csiroenergy <ident> <paste-your-token>
+#[[tool.poetry.source]]
+#name = "csiroenergy"
+#url = "https://pkgs.dev.azure.com/csiro-energy/csiro-energy/_packaging/csiro-python-packages/pypi/simple/"
+#secondary = true # if this is true, it will be checked after the main index
+#default = false # if true, this index will be checked before other repos declared in pyproject.toml.

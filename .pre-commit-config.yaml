@@ -66,6 +66,7 @@ repos:
 
   # Checks for bad licenses in dependencies
   - repo: https://github.com/dhatim/python-license-check
-    rev: 0.7.1
+    rev: 0.9.2
     hooks:
       - id: liccheck
+        language: system
