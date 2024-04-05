@@ -179,3 +179,4 @@ license-check.txt
 
 # keep data dir, even if empty
 !data/
+*.html

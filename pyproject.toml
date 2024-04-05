@@ -14,6 +14,10 @@ loguru = ">=0.5.3"
 virtualenv = ">=20.24.2"
 pydantic = "^2.6.3"
 dch-interface = {path = "../dch-interface-py", develop = true}
+plotly = "^5.20.0"
+brickschema = {extras = ["persistence"], version = "^0.7.5"}
+panel = "^1.3.8"
+tqdm = "^4.66.2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^6.2.3"

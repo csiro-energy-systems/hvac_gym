@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Self
 
 from dch.dch_interface import DCHBuilding
-from paths.dch_paths import SemPath, SemPaths
+from dch.paths.dch_paths import SemPath, SemPaths
 from pydantic import BaseModel, field_validator
 
 

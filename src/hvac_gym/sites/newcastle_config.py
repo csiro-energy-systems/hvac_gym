@@ -1,17 +1,22 @@
 from dch.dch_interface import DCHBuilding
-from paths.dch_paths import SemPaths
+from dch.paths.dch_paths import SemPaths
 
 from hvac_gym.sites.model_config import HVACModel, HVACModelConf
+
+""" Newcastle notes:
+    - one office AHU per zone, 15 zones, 3 levels
+    - 2 lab AHUs, 2 levels, 1 VAV per room
+"""
 
 sa_temp_model = HVACModel(
     target=SemPaths.ahu_sa_temp,
     inputs=[
+        SemPaths.oa_temp,
         SemPaths.ahu_ra_temp,
         SemPaths.ahu_chw_valve_sp,
         SemPaths.ahu_hw_valve_sp,
         SemPaths.ahu_sa_fan_speed_sp,
         SemPaths.ahu_oa_damper,
-        SemPaths.oa_temp,
     ],
     derived_inputs=[],  # [ModelPoint.minute_of_day, ModelPoint.day_of_week],
     horizon_mins=0,

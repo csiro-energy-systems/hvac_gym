@@ -1,17 +1,23 @@
 from dch.dch_interface import DCHBuilding
-from paths.dch_paths import SemPaths
+from dch.paths.dch_paths import SemPaths
 
 from hvac_gym.sites.model_config import HVACModel, HVACModelConf
+
+""" Clayton notes:
+    - fixed-speed AHU fans (just have an on-off status point),
+    - no zone or supply air humidity sensors
+    - no zone RH sensors, so no RH models
+"""
 
 sa_temp_model = HVACModel(
     target=SemPaths.ahu_sa_temp,
     inputs=[
-        SemPaths.ahu_zone_temp,
+        SemPaths.ahu_zone_temp | SemPaths.ahu_room_temp,
+        SemPaths.oa_temp,
         SemPaths.ahu_chw_valve_sp,
         SemPaths.ahu_hw_valve_sp,
         SemPaths.ahu_enable_status,
         SemPaths.ahu_oa_damper,
-        SemPaths.oa_temp,
     ],
     derived_inputs=[],  # [ModelPoint.minute_of_day, ModelPoint.day_of_week],
     horizon_mins=0,
@@ -30,10 +36,6 @@ zone_temp_model = HVACModel(
     lag_target=False,
 )
 
-""" Clayton's notes:
-    - fixed-speed AHU fans (just have an on-off status point),
-    - no zone or supply air humidity sensors
-"""
 model_conf = HVACModelConf(
     site=DCHBuilding("csiro", "clayton", "Building307", tz="Australia/Melbourne"),
     plot_data=False,
