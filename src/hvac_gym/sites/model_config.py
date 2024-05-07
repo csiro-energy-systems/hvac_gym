@@ -4,7 +4,8 @@ from typing import Self
 
 from dch.dch_interface import DCHBuilding
 from dch.paths.dch_paths import SemPath, SemPaths
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
+from rdflib import BRICK, URIRef
 
 
 def normalise_sempaths(v: list[SemPath | SemPaths]) -> list[SemPath]:
@@ -16,14 +17,19 @@ def normalise_sempath(v: SemPath | SemPaths) -> SemPath:
 
 
 class HVACModel(BaseModel):
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True
+    )  # tell pydantic to allow dataframes etc
+
     # the target variable that the model predicts
     target: SemPath | SemPaths
 
     # inputs: list of ModelPoint to use as inputs to the model
     inputs: list[SemPath | SemPaths]
 
-    # scope: BRICK class to use as scope for the model - defines where its inputs are scoped from.
-    # scope: BRICK
+    # scope: defines at what level the model is trainged and where its inputs are from.
+    # E.g. use BRICK.AHU if expecting a new model and target for each input on every AHU.
+    scope: URIRef | None = BRICK.AHU
 
     # derived_inputs: list of ModelPoint to derive from inputs
     derived_inputs: list[SemPath | SemPaths]
@@ -102,6 +108,8 @@ class HVACModelConf(BaseModel):
     # Map of target_col to input_col_list for each model to build per AHU
     # To avoid leakage of real-world conditions in gym, model inputs should ONLY be other model targets/outputs, RL actions/setpoints,
     # or external sensors.
+    # WARNING: order is important here.  Need to specify shorter-horizon models first so that their predictions are used as inputs to
+    # longer-horizon models.
     ahu_models: list[HVACModel]
 
     @classmethod
