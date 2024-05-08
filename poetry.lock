@@ -940,7 +940,7 @@ description = "This library exposes Data Clearinghouse (DCH) and Senaps API endp
 optional = false
 python-versions = ">=3.9,<3.13"
 files = []
-develop = true
+develop = false
 
 [package.dependencies]
 brickschema = {version = "^0.7.5", extras = ["persistence"]}
@@ -958,8 +958,10 @@ tblib = "^3.0.0"
 tqdm = "^4.66.2"
 
 [package.source]
-type = "directory"
-url = "../dch-interface-py"
+type = "git"
+url = "git@github.com:csiro-energy-systems/dch-interface-py.git"
+reference = "feature/update_paths"
+resolved_reference = "660f9e92d5fca5f061932230940996451749f8d1"
 
 [[package]]
 name = "debugpy"
@@ -5696,4 +5698,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<3.11.0 || >3.11.0,<3.13"
-content-hash = "2bd71be6b643fd30b5fa9a3fc437603b3960f3a41454e6b2398a7b0ba7729325"
+content-hash = "d77f67016badd42ed1cca7d0246b62886f5175cc4a9e82cfe13fc9255d057cfc"
