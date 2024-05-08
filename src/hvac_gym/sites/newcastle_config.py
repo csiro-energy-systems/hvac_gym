@@ -33,7 +33,7 @@ ahu_chws_elec_power = HVACModel(
     ],
     derived_inputs=[],
     horizon_mins=10,
-    lags=list(range(1, 7, 1)),
+    lags=[],  # list(range(1, 7, 1)),
     lag_target=False,
     scope=BRICK.Site,
 )
@@ -57,7 +57,7 @@ sa_zone_temp = HVACModel(
     ],
     derived_inputs=[],
     horizon_mins=0,
-    lags=list(range(1, 7, 1)),
+    lags=[],  # list(range(1, 7, 1)),
     lag_target=False,
     scope=BRICK.Site,
 )

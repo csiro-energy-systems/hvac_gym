@@ -30,21 +30,21 @@ def split_alternate_days(df: pd.DataFrame, n_sets: int = 2) -> list[pd.DataFrame
     # no days from any set should be in any other set
     for s in range(0, n_sets - 1):
         assert (
-                len(
-                    set(pd.unique(sets[s].index.date)).intersection(
-                        set(pd.unique(sets[s + 1].index.date))
-                    )
+            len(
+                set(pd.unique(sets[s].index.date)).intersection(
+                    set(pd.unique(sets[s + 1].index.date))
                 )
-                == 0
+            )
+            == 0
         )
 
-    df.drop(columns=["doy"], inplace=True)
+    df.drop(columns=["doy"], inplace=True)  # noqa
 
     return sets
 
 
 def elm_optuna_param_search(
-        x_train: pd.DataFrame, y_train: pd.DataFrame, n_trials: int = 100
+    x_train: pd.DataFrame, y_train: pd.DataFrame, n_trials: int = 100
 ) -> tuple[ELMRegressor, Figure]:
     """
     Performs an optuna search for the best hyperparameters for an ELMRegressor model, trying to maximise cross-validation score on the

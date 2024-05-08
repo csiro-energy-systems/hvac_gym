@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from pprint import pformat
 
-import dch.utils.data_utils
 import numpy as np
 import pandas as pd
 import plotly.io as pio
@@ -14,6 +13,7 @@ from dch.paths.dch_paths import SemPath, SemPaths
 from dch.utils.data_utils import resample_and_join_streams
 from dch.utils.init_utils import cd_project_root
 from dotenv import load_dotenv
+from joblib import Memory
 from pandas import DataFrame
 from plotly import express as px
 from plotly.graph_objs import Figure
@@ -29,7 +29,7 @@ from hvac_gym.config.log_config import get_logger
 from hvac_gym.sites import newcastle_config
 from hvac_gym.sites.model_config import HVACModel, HVACModelConf
 from hvac_gym.training.train_utils import split_alternate_days
-from hvac_gym.vis.vis_tools import df_to_html, figs_to_html
+from hvac_gym.vis.vis_tools import figs_to_html
 
 pio.templates.default = "plotly_dark"
 
@@ -81,7 +81,7 @@ class TrainSite:
         self.dch = DCHInterface()
 
     def check_streams(
-            self, model_conf: HVACModel, building: DCHBuilding
+        self, model_conf: HVACModel, building: DCHBuilding
     ) -> dict[str, dict[SemPath, DataFrame]]:
         """Check that necessary streams exist
         :param model_conf: the model configuration
@@ -100,8 +100,8 @@ class TrainSite:
         }
 
         missing_streams = (
-                              [point for point, streams in input_streams.items() if streams.empty]
-                          ) + ([target_point] if target_stream.empty else [])
+            [point for point, streams in input_streams.items() if streams.empty]
+        ) + ([target_point] if target_stream.empty else [])
         if len(missing_streams) > 0:
             logger.error(
                 f"Missing target or input streams for {building}. Missing inputs: {missing_streams}"
@@ -113,11 +113,11 @@ class TrainSite:
         }
 
     def preprocess_data(
-            self,
-            data_set: TrainingSet,
-            site_conf: HVACModelConf,
-            model_conf: HVACModel,
-            streams: dict[str, DataFrame],
+        self,
+        data_set: TrainingSet,
+        site_conf: HVACModelConf,
+        model_conf: HVACModel,
+        streams: dict[str, DataFrame],
     ) -> DataFrame:
         """Preprocesses the training data for each AHU and model
         :param streams:
@@ -181,11 +181,11 @@ class TrainSite:
         return building_df
 
     def train_site_model(
-            self,
-            target_cols: list[str],
-            train_test_df: DataFrame,
-            site: DCHBuilding,
-            model_conf: HVACModelConf,
+        self,
+        target_cols: list[str],
+        train_test_df: DataFrame,
+        site: DCHBuilding,
+        model_conf: HVACModelConf,
     ) -> RegressorMixin:
 
         # TODO make this generic
@@ -232,14 +232,14 @@ class TrainSite:
 
         if isinstance(model, TPOTRegressor):
             with pd.option_context(
-                    "display.max_rows",
-                    None,
-                    "display.max_columns",
-                    None,
-                    "display.width",
-                    400,
-                    "display.max_colwidth",
-                    50,
+                "display.max_rows",
+                None,
+                "display.max_columns",
+                None,
+                "display.width",
+                400,
+                "display.max_colwidth",
+                50,
             ):
                 # logger.info(f"TPOT All Evaluated Individuals: \n{model.evaluated_individuals}")
                 logger.info(f"Best TPOT models: \n{model.pareto_front}")
@@ -257,8 +257,8 @@ class TrainSite:
 
         if isinstance(model, LinearModel):
             features = dict(zip(np.round(model.coef_, 4), model.feature_names_in_))
-            features = sorted(features.items(), reverse=True)
-            logger.info(f"Model coefficients: \n{pformat(features)}")
+            features = dict(sorted(features.items(), reverse=True))
+            logger.info(f"Model coefficients: \n{pformat(features, width=200)}")
 
         # add predictions to the original df
         train_test_df[f"{target_cols[0]}_test_pred"] = test_pred.copy()
@@ -283,7 +283,9 @@ class TrainSite:
         )
 
         figs_to_html(
-            [fig1, fig2], f"{title} - R2 score={r2:.3f}, RMSE={rmse:.3f}", show=True
+            [fig1, fig2],
+            f"output/{title} - R2 score={r2:.3f}, RMSE={rmse:.3f}",
+            show=False,
         )
 
         # copy all attrs from the original df to the model
@@ -297,204 +299,6 @@ class TrainSite:
         if out_dir:
             figs_to_html([fig], out_dir / f"{title}.html", show=True)
         return fig
-
-    def train_site(
-            self,
-            target: TrainingData,
-            inputs: list[TrainingData],
-            model_conf: HVACModel,
-            site_conf: HVACModelConf,
-    ) -> None:
-
-        if any(["Electrical_Power_Sensor" in p for p in model_conf.target.path]):
-            target.streams = dch.utils.data_utils.filter_phases(target.streams)
-            target.streams["streams"] = target.streams["streams"].explode()
-            target.streams = target.streams.drop_duplicates(subset="streams")
-
-        target_cols = list(target.streams["column_name"])
-        input_cols = list(flatten([i.streams["column_name"] for i in inputs]))
-        target_df = target.data[target_cols]
-        input_dfs = [
-            i.data[[c for c in input_cols if c in i.data.columns]] for i in inputs
-        ]
-
-        train_df, sample_rate_mins = resample_and_join_streams([target_df] + input_dfs)
-
-        for stream_type in building_stream_types.index:
-            cols = [
-                c
-                for c in building_stream_types.loc[stream_type, "column_name"]
-                if c in building_df.columns
-            ]
-            building_df[stream_type] = building_df[cols].median(axis=1)
-            building_df = building_df.drop(columns=cols)
-
-        out_dir = Path("output")
-        # px.defaults.template = "plotly"
-        # fig = px.line(train_df, height=800)
-        # fig.update_layout(
-        #     title=f"Training Data for {site_conf.site} model, target: {model_conf.target}"
-        # )
-        # all_streams = pd.concat([target.streams, *[i.streams for i in inputs]])
-        # all_streams["sem_path"] = all_streams["sem_path"].astype(str)
-        # streams_html = df_to_html(all_streams)
-        # f = f"train_data.{site_conf.site}_{model_conf.target}_{model_conf.target}.html"
-        # figs_to_html([fig], out_dir / f, extra_html=streams_html, show=True)
-
-        from sklearn.model_selection import train_test_split
-
-        train_df = train_df.dropna()
-        valve_cols = list(
-            flatten(
-                [
-                    i.streams.query("type=='Valve_Position_Sensor'")["column_name"]
-                    for i in inputs
-                ]
-            )
-        )
-        train_df["chw_valve_median"] = train_df[
-            [v for v in valve_cols if v in train_df.columns]
-        ].median(axis=1)
-
-        train, test = train_test_split(
-            train_df, test_size=0.4, random_state=42, shuffle=False
-        )
-        train_x, train_y = train.drop(columns=target_cols), train[target_cols]
-        test_x, test_y = test.drop(columns=target_cols), test[target_cols]
-
-        # scatterplot of chw_valve_total vs target, colour by outside air temp
-        fig = px.scatter(
-            train_df,
-            x="chw_valve_total",
-            y=target_cols[0],
-            color="Equipment|Outside_Air_Temperature_Sensor.Intake_Air_Temperature_Sensor_0",
-        )
-        figs_to_html(
-            [fig],
-            out_dir / f"scatterplot_{site_conf.site}_{model_conf.target}.html",
-            show=True,
-        )
-
-        from sklearn.ensemble import RandomForestRegressor
-
-        model = RandomForestRegressor(n_jobs=-1, verbose=1, n_estimators=150)
-        model.fit(train_x, train_y)
-        pred = model.predict(test_x)
-        from sklearn.metrics import r2_score, root_mean_squared_error
-
-        print(f"R2 score: {r2_score(test_y, pred)}")
-        print(f"RMSE score: {root_mean_squared_error(test_y, pred)}")
-
-        # scatter of target vs prediction values
-        fig = px.scatter(
-            pd.DataFrame({"target": test_y[target_cols[0]], "prediction": pred})
-        )
-        figs_to_html(
-            [fig],
-            out_dir / f"scatter_{site_conf.site}_{model_conf.target}.html",
-            show=True,
-        )
-
-        # plot target vs predictions and chw_valve_total as line
-        fig = px.line(
-            pd.DataFrame(
-                {
-                    "target": test_y[target_cols[0]],
-                    "prediction": pred,
-                    "valve_total": test_x["chw_valve_median"],
-                }
-            )
-        )
-        figs_to_html(
-            [fig],
-            out_dir / f"predictions_{site_conf.site}_{model_conf.target}.html",
-            show=True,
-        )
-
-    def train_ahus(
-            self,
-            target: TrainingData,
-            inputs: list[TrainingData],
-            model_conf: HVACModel,
-            site_conf: HVACModelConf,
-    ) -> dict[str, DataFrame]:
-        # streams which apply to any specific AHU
-        input_streams = pd.concat(
-            [i.streams[~pd.isna(i.streams["ahu_name"])] for i in inputs]
-        )
-        input_ahus = list(
-            sorted(
-                set(
-                    filter(
-                        None, flatten([i.streams["ahu_name"].unique() for i in inputs])
-                    )
-                )
-            )
-        )
-        target_ahus = list(sorted(target.streams["ahu_name"].unique()))
-        train_dfs: dict[str, DataFrame] = {}
-        for ahu in tqdm(target_ahus, desc="Preprocessing AHUs", unit="AHUs"):
-
-            # find just the streams and data that apply to this AHU (or all AHUs, like OA Temp)
-            ahu_target_streams = target.streams[target.streams["ahu_name"] == ahu]
-            ahu_input_streams = input_streams[input_streams["ahu_name"] == ahu]
-
-            target_cols = list(ahu_target_streams["column_name"])
-            input_cols = list(flatten(ahu_input_streams["column_name"]))
-
-            required_input_paths = {
-                *ahu_input_streams["sem_path"],
-                *building_input_streams["sem_path"],
-            }
-            missing_sempaths = [
-                p for p in model_conf.inputs if p not in required_input_paths
-            ]
-            if len(missing_sempaths) > 0:
-                logger.error(f"Missing input points for AHU {ahu}: {missing_sempaths}")
-                continue
-
-            if not any([c in target.data.columns for c in target_cols]):
-                logger.error(
-                    f"Target columns {target_cols} not found in target data for AHU {ahu}"
-                )
-                continue
-
-            if not any([c in i.data.columns for c in input_cols for i in inputs]):
-                logger.error(
-                    f"Input columns {input_cols} not found in input data for AHU {ahu}"
-                )
-                continue
-
-            logger.success(
-                f"Found streams for all {len(required_input_paths)} necessary paths IDs for building, AHU {ahu}, model: {model_conf.target} model."
-            )
-
-            # Get the target dataframe
-            target_df = target.data[target_cols]
-
-            # Get and join all the dataframes for all columns that match the input_cols
-            input_dfs = [
-                i.data[[c for c in input_cols if c in i.data.columns]] for i in inputs
-            ]
-            train_df, sample_rate_mins = resample_and_join_streams(
-                [target_df] + input_dfs + [building_df]
-            )
-            train_dfs[ahu] = train_df
-
-            # plot and save data
-            out_dir = Path("output")
-            px.defaults.template = "plotly"
-            fig = px.line(train_df, height=800)
-            fig.update_layout(
-                title=f"Training Data for {site_conf.site} model for AHU {ahu}, target: {model_conf.target}"
-            )
-            all_streams = pd.concat([ahu_target_streams, ahu_input_streams])
-            all_streams["sem_path"] = all_streams["sem_path"].astype(str)
-            streams_html = df_to_html(all_streams)
-            f = f"train_data.{site_conf.site}_{ahu}_{model_conf.target}.html"
-            figs_to_html([fig], out_dir / f, extra_html=streams_html, show=False)
-
-        return train_dfs
 
     def run(self, site_config: HVACModelConf, start: datetime, end: datetime) -> None:
         """Main entrypoint to acquire data, train models and run gym-like simulation for a site"""
@@ -542,11 +346,11 @@ class TrainSite:
         self.simulate(sim_df, models, streams, site_config)
 
     def simulate(
-            self,
-            sim_df: DataFrame,
-            models: dict[SemPath | SemPaths, RegressorMixin],
-            streams: dict[str, dict[SemPath | SemPaths, DataFrame]],
-            site_config: HVACModel,
+        self,
+        sim_df: DataFrame,
+        models: dict[SemPath | SemPaths, RegressorMixin],
+        streams: dict[str, dict[SemPath | SemPaths, DataFrame]],
+        site_config: HVACModel,
     ) -> None:
         """
         Simple gym-like simulation with the models and combined dataframe.
@@ -563,23 +367,29 @@ class TrainSite:
         actuals.columns = [f"{c}_actual" for c in actuals.columns]
         sim_df = actuals.join(sim_df)  # for debugging
 
-        for time in tqdm(sim_df.index[:500], desc="Simulating", unit="steps"):
+        for idx, time in enumerate(
+            tqdm(sim_df.index[:200], desc="Simulating", unit="steps")
+        ):
 
             all_inputs_no_lags = []
 
             for model_conf in site_config.ahu_models:
                 target = model_conf.target
-                target_streams = streams["target_streams"].keys()
 
                 model = models[target]
                 inputs = model.feature_names_in_
                 model_df = sim_df[inputs]
 
-                sample_rate_mins = model.attrs["sample_rate_mins"]
                 inputs_no_lags = model.attrs["input_cols"]
                 all_inputs_no_lags.extend(inputs_no_lags)
 
-                max_lag_mins = max(model_conf.lags) * sample_rate_mins
+                # set chilled water valve to square wave, cycling every N steps
+                chwv_col = "AHU|Chilled_Water_Coil|Chilled_Water_Valve|Valve_Position_Sensor_median"
+                cycle_steps = 12
+                chwv_sp = 100 if idx % cycle_steps < cycle_steps / 2 else 0
+                # logger.info(f"Setting {chwv_col} to {chwv_sp}")
+                sim_df.loc[time, chwv_col] = chwv_sp
+                # TODO set lags also
 
                 # get the model's prediction for the next timestep.
                 # note: inputs/lags have already been down-shifted, so we can just apply prediction to the inputs at the timestamp directly.
@@ -637,8 +447,6 @@ class TrainSite:
         return streams
 
 
-from joblib import Memory
-
 memory = Memory(Path.home() / ".pyfunc_cache")
 try:
     memory.reduce_size(bytes_limit="1G", age_limit=timedelta(days=365))
@@ -648,10 +456,10 @@ except ValueError:
 
 @memory.cache()
 def get_data(
-        streams: dict[str, DataFrame],
-        building: DCHBuilding,
-        start: datetime,
-        end: datetime,
+    streams: dict[str, DataFrame],
+    building: DCHBuilding,
+    start: datetime,
+    end: datetime,
 ) -> TrainingSet:
     """
     Gets a dictionary of dataframes for the target and input streams
