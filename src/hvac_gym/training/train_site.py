@@ -288,7 +288,7 @@ class TrainSite:
                 _hwv_col = str(SemPaths.ahu_hw_valve_sp.value)
                 cycle_steps = 12 * 2
 
-                chwv_sp = 50 if idx % cycle_steps < cycle_steps / 2 else 0
+                chwv_sp = 100 if idx % cycle_steps < cycle_steps / 2 else 0
                 sim_df.loc[time, chwv_col] = chwv_sp
 
                 # hwv_sp = 100 if idx % cycle_steps > cycle_steps / 2 else 0
