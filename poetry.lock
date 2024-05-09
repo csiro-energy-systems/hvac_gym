@@ -940,7 +940,7 @@ description = "This library exposes Data Clearinghouse (DCH) and Senaps API endp
 optional = false
 python-versions = ">=3.9,<3.13"
 files = []
-develop = false
+develop = true
 
 [package.dependencies]
 brickschema = {version = "^0.7.5", extras = ["persistence"]}
@@ -958,10 +958,8 @@ tblib = "^3.0.0"
 tqdm = "^4.66.2"
 
 [package.source]
-type = "git"
-url = "git@github.com:csiro-energy-systems/dch-interface-py.git"
-reference = "feature/update_paths"
-resolved_reference = "660f9e92d5fca5f061932230940996451749f8d1"
+type = "directory"
+url = "../dch-interface-py"
 
 [[package]]
 name = "debugpy"
@@ -1757,6 +1755,34 @@ webcolors = {version = ">=1.11", optional = true, markers = "extra == \"format-n
 [package.extras]
 format = ["fqdn", "idna", "isoduration", "jsonpointer (>1.13)", "rfc3339-validator", "rfc3987", "uri-template", "webcolors (>=1.11)"]
 format-nongpl = ["fqdn", "idna", "isoduration", "jsonpointer (>1.13)", "rfc3339-validator", "rfc3986-validator (>0.1.0)", "uri-template", "webcolors (>=1.11)"]
+
+[[package]]
+name = "juliacall"
+version = "0.9.20"
+description = "Julia and Python in seamless harmony"
+optional = false
+python-versions = "~=3.8"
+files = [
+    {file = "juliacall-0.9.20-py3-none-any.whl", hash = "sha256:1debce8c332ed4973b1a5e1b456d7561735965b64e8964fdd8f9d274a24bc395"},
+    {file = "juliacall-0.9.20.tar.gz", hash = "sha256:d67e399777c368858051f600c39fd8ed5d79d601a11d6336f103a9748ed69ded"},
+]
+
+[package.dependencies]
+juliapkg = ">=0.1.8,<0.2.0"
+
+[[package]]
+name = "juliapkg"
+version = "0.1.11"
+description = "Julia version manager and package manager"
+optional = false
+python-versions = "*"
+files = [
+    {file = "juliapkg-0.1.11-py3-none-any.whl", hash = "sha256:2f44a9b9e1d6fa7c9ad077527452c4f4491ca81ada844909a98d07be457a6ac1"},
+    {file = "juliapkg-0.1.11.tar.gz", hash = "sha256:de0a596c0c65f2da93a24ae45fb71626cfa238d067dc37684837ef7ba74a4af7"},
+]
+
+[package.dependencies]
+semantic-version = ">=2.9,<3.0"
 
 [[package]]
 name = "jupyter"
@@ -2629,6 +2655,23 @@ files = [
 ]
 
 [[package]]
+name = "mpmath"
+version = "1.3.0"
+description = "Python library for arbitrary-precision floating-point arithmetic"
+optional = false
+python-versions = "*"
+files = [
+    {file = "mpmath-1.3.0-py3-none-any.whl", hash = "sha256:a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c"},
+    {file = "mpmath-1.3.0.tar.gz", hash = "sha256:7a28eb2a9774d00c7bc92411c19a89209d5da7c4c9a9e227be8330a23a25b91f"},
+]
+
+[package.extras]
+develop = ["codecov", "pycodestyle", "pytest (>=4.6)", "pytest-cov", "wheel"]
+docs = ["sphinx"]
+gmpy = ["gmpy2 (>=2.1.0a4)"]
+tests = ["pytest (>=4.6)"]
+
+[[package]]
 name = "msgpack"
 version = "1.0.8"
 description = "MessagePack serializer"
@@ -3473,6 +3516,46 @@ tomli = ">=1.2.2"
 poetry-plugin = ["poetry (>=1.0,<2.0)"]
 
 [[package]]
+name = "polars"
+version = "0.20.25"
+description = "Blazingly fast DataFrame library"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "polars-0.20.25-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:126e3b7d9394e4b23b4cc48919b7188203feeeb35d861ad808f281eaa06d76e2"},
+    {file = "polars-0.20.25-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:3bda62b681726538714a1159638ab7c9eeca6b8633fd778d84810c3e13b9c7e3"},
+    {file = "polars-0.20.25-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:62c8826e81c759f07bf5c0ae00f57a537644ae05fe68737185666b8ad8430664"},
+    {file = "polars-0.20.25-cp38-abi3-manylinux_2_24_aarch64.whl", hash = "sha256:0fb5e7a4a9831fba742f1c706e01656607089b6362a5e6f8d579b134a99795ce"},
+    {file = "polars-0.20.25-cp38-abi3-win_amd64.whl", hash = "sha256:9eaeb9080c853e11b207d191025e0ba8fd59ea06a36c22d410a48f2f124e18cd"},
+    {file = "polars-0.20.25.tar.gz", hash = "sha256:4308d63f956874bac9ae040bdd6d62b2992d0b1e1349301bc7a3b59458189108"},
+]
+
+[package.extras]
+adbc = ["adbc-driver-manager", "adbc-driver-sqlite"]
+all = ["polars[adbc,async,cloudpickle,connectorx,deltalake,fastexcel,fsspec,gevent,numpy,pandas,plot,pyarrow,pydantic,pyiceberg,sqlalchemy,timezone,torch,xlsx2csv,xlsxwriter]"]
+async = ["nest-asyncio"]
+cloudpickle = ["cloudpickle"]
+connectorx = ["connectorx (>=0.3.2)"]
+deltalake = ["deltalake (>=0.15.0)"]
+fastexcel = ["fastexcel (>=0.9)"]
+fsspec = ["fsspec"]
+gevent = ["gevent"]
+matplotlib = ["matplotlib"]
+numpy = ["numpy (>=1.16.0)"]
+openpyxl = ["openpyxl (>=3.0.0)"]
+pandas = ["pandas", "pyarrow (>=7.0.0)"]
+plot = ["hvplot (>=0.9.1)"]
+pyarrow = ["pyarrow (>=7.0.0)"]
+pydantic = ["pydantic"]
+pyiceberg = ["pyiceberg (>=0.5.0)"]
+pyxlsb = ["pyxlsb (>=1.0)"]
+sqlalchemy = ["pandas", "sqlalchemy"]
+timezone = ["backports-zoneinfo", "tzdata"]
+torch = ["torch"]
+xlsx2csv = ["xlsx2csv (>=0.8.0)"]
+xlsxwriter = ["xlsxwriter"]
+
+[[package]]
 name = "pre-commit"
 version = "2.21.0"
 description = "A framework for managing and maintaining multi-language pre-commit hooks."
@@ -3958,6 +4041,26 @@ dev-lint = ["black (==23.11.0)", "platformdirs", "ruff (>=0.1.5,<0.2.0)"]
 dev-type-checking = ["mypy (>=0.812,<0.900)", "mypy (>=0.900,<0.1000)", "platformdirs", "types-setuptools"]
 http = ["sanic (>=22.12,<23)", "sanic-cors (==2.2.0)", "sanic-ext (>=23.3,<23.6)"]
 js = ["pyduktape2 (>=0.4.6,<0.5.0)"]
+
+[[package]]
+name = "pysr"
+version = "0.18.4"
+description = "Simple and efficient symbolic regression"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "pysr-0.18.4-py3-none-any.whl", hash = "sha256:8035f69393214a8eb0c8bdc9493c8f89012a3602d3d7f75fc2e211ecc74f73e1"},
+    {file = "pysr-0.18.4.tar.gz", hash = "sha256:9faff929d4b4ba0c0af2aee3565bb340e1371cb756d81e457d5c18e4be411268"},
+]
+
+[package.dependencies]
+click = ">=7.0.0,<9.0.0"
+juliacall = "0.9.20"
+numpy = ">=1.13.0,<2.0.0"
+pandas = ">=0.21.0,<3.0.0"
+scikit-learn = ">=1.0.0,<2.0.0"
+setuptools = ">=50.0.0"
+sympy = ">=1.0.0,<2.0.0"
 
 [[package]]
 name = "pytest"
@@ -5142,6 +5245,20 @@ files = [
 ]
 
 [[package]]
+name = "sympy"
+version = "1.12"
+description = "Computer algebra system (CAS) in Python"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "sympy-1.12-py3-none-any.whl", hash = "sha256:c3588cd4295d0c0f603d0f2ae780587e64e2efeedb3521e46b9bb1d08d184fa5"},
+    {file = "sympy-1.12.tar.gz", hash = "sha256:ebf595c8dac3e0fdc4152c51878b498396ec7f30e7a914d6071e674d49420fb8"},
+]
+
+[package.dependencies]
+mpmath = ">=0.19"
+
+[[package]]
 name = "tblib"
 version = "3.0.0"
 description = "Traceback serialization library."
@@ -5698,4 +5815,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<3.11.0 || >3.11.0,<3.13"
-content-hash = "d77f67016badd42ed1cca7d0246b62886f5175cc4a9e82cfe13fc9255d057cfc"
+content-hash = "b3a2895e66fc8169aeef259f5a2eb7fd8053a83884107cba8c5fe23c74523f77"

@@ -1,10 +1,11 @@
 # Created by wes148 at 1/07/2022
 from pathlib import Path
-from typing import Self
+from typing import Any, Callable, Self
 
 from dch.dch_interface import DCHBuilding
 from dch.paths.dch_paths import SemPath, SemPaths
-from pydantic import BaseModel, ConfigDict, field_validator
+from pandas import DataFrame
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from rdflib import BRICK, URIRef
 
 
@@ -27,29 +28,54 @@ class HVACModel(BaseModel):
     # inputs: list of ModelPoint to use as inputs to the model
     inputs: list[SemPath | SemPaths]
 
+    # output: the output variable to predict. If None, the target variable is used.
+    output: SemPath | SemPaths | None = None
+
+    # horizon_mins: how far ahead to predict
+    horizon_mins: int
+
     # scope: defines at what level the model is trainged and where its inputs are from.
     # E.g. use BRICK.AHU if expecting a new model and target for each input on every AHU.
     scope: URIRef | None = BRICK.AHU
 
     # derived_inputs: list of ModelPoint to derive from inputs
-    derived_inputs: list[SemPath | SemPaths]
-
-    # horizon_mins: how far ahead to predict
-    horizon_mins: int
+    derived_inputs: list[SemPath | SemPaths] = []
 
     # lags: list of lags to use for each input
-    lags: list[int]
+    lags: list[int] = []
 
     # lag_target: whether to lag the target column as well as inputs
-    lag_target: bool
+    lag_target: bool = False
+
+    # filters: list of functions to apply to the dataframe before training the model
+    filters: list[Callable[[DataFrame, dict[str, Any]], DataFrame] | None] = []
+
+    def __hash__(self) -> int:
+        """hashes all the attributes of the model, including list elements if theattribute is a list"""
+        return hash(
+            (
+                self.target,
+                tuple(self.inputs),
+                self.output,
+                self.horizon_mins,
+                self.scope,
+                tuple(self.derived_inputs),
+                tuple(self.lags),
+                self.lag_target,
+                tuple(self.filters),
+            )
+        )
 
     @field_validator("inputs", "derived_inputs")
     def validate_inputs(cls: Self, v: list[SemPath | SemPaths]) -> list[SemPath]:
         return normalise_sempaths(v)
 
-    @field_validator("target")
-    def validate_target(cls: Self, v: SemPath | SemPaths) -> SemPath:
-        return normalise_sempath(v)
+    @model_validator(mode="after")
+    def validate_target(self: Self) -> SemPath:
+        self.target = normalise_sempath(self.target)
+        if self.output is None:
+            self.output = self.target
+        return self
 
 
 class HVACModelConf(BaseModel):

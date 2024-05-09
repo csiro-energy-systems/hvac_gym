@@ -1,12 +1,10 @@
 import pickle
 from datetime import datetime, timedelta
 from pathlib import Path
-from pprint import pformat
 
 import numpy as np
 import pandas as pd
 import plotly.io as pio
-import sklearn
 from dch.dch_interface import DCHBuilding, DCHInterface
 from dch.dch_model_utils import flatten, rename_columns
 from dch.paths.dch_paths import SemPath, SemPaths
@@ -14,11 +12,13 @@ from dch.utils.data_utils import resample_and_join_streams
 from dch.utils.init_utils import cd_project_root
 from dotenv import load_dotenv
 from joblib import Memory
-from pandas import DataFrame
+from pandas import DataFrame, Series
 from plotly import express as px
 from plotly.graph_objs import Figure
 from pydantic import BaseModel, ConfigDict
+from pysr import PySRRegressor
 from sklearn.base import RegressorMixin
+from sklearn.linear_model import ElasticNetCV
 from sklearn.linear_model._base import LinearModel
 from sklearn.metrics import r2_score, root_mean_squared_error
 from sklearn.pipeline import Pipeline
@@ -47,6 +47,12 @@ pd.set_option(
     "display.max_colwidth",
     30,
 )
+
+memory = Memory(Path.home() / ".pyfunc_cache")
+try:
+    memory.reduce_size(bytes_limit="1G", age_limit=timedelta(days=365))
+except ValueError:
+    pass  # workaround a bug when cache is empty
 
 
 class TrainingData(BaseModel):
@@ -133,6 +139,7 @@ class TrainSite:
         )
 
         # take median of each group of building data types (e.g. there's often several OAT sensors)
+        # use sempaths instances for new aggregated column names
         building_stream_types = building_input_streams.groupby("type_path").aggregate(
             {"column_name": lambda x: list(x)}
         )
@@ -142,9 +149,10 @@ class TrainSite:
                 for c in building_stream_types.loc[stream_type, "column_name"]
                 if c in building_df.columns
             ]
-            building_df[f"{stream_type}_median"] = building_df[cols].median(
-                axis=1, skipna=True
-            )
+            sempath = building_input_streams.query("type_path == @stream_type")[
+                "sem_path"
+            ].unique()[0]
+            building_df[sempath] = building_df[cols].median(axis=1, skipna=True)
             # building_df[f"{stream_type}_total"] = building_df[cols].sum(axis=1, skipna=True)
             building_df = building_df.drop(columns=cols)
 
@@ -155,13 +163,18 @@ class TrainSite:
         target_cols = list(target.streams["column_name"])
         target_df = target.data[target_cols]
         target_df = pd.DataFrame(target_df.median(axis=1), columns=[target_col])
-        building_df = target_df.resample(f"{sample_rate}min").median().join(building_df)
+        building_df = (
+            target_df.resample(f"{sample_rate}min")
+            .median()
+            .join(building_df)
+            .interpolate(limit=3, limit_direction="forward", method="linear")
+        )
 
         # add lagged columns for each input
         lagged_cols = []
         for col in input_cols:
             for lag in model_conf.lags:
-                lag_col = f"{col}+{lag * sample_rate}min"
+                lag_col = f"{col}_{int(lag * sample_rate)}min"
                 building_df[lag_col] = building_df[col].shift(lag)
                 lagged_cols.append(lag_col)
 
@@ -180,130 +193,11 @@ class TrainSite:
 
         return building_df
 
-    def train_site_model(
-        self,
-        target_cols: list[str],
-        train_test_df: DataFrame,
-        site: DCHBuilding,
-        model_conf: HVACModelConf,
-    ) -> RegressorMixin:
-
-        # TODO make this generic
-        # train_test_df = train_test_df.query("Valve_Position_Sensor_total > 0")
-
-        _input_cols = train_test_df.attrs["input_cols"]
-        lagged_cols = train_test_df.attrs["lagged_cols"]
-        _sample_rate = train_test_df.attrs["sample_rate_mins"]
-
-        train_test_df = train_test_df.sort_index().dropna()
-        train, test = split_alternate_days(train_test_df, n_sets=2)
-
-        train_x, train_y = train.drop(columns=target_cols), train[target_cols]
-        test_x, test_y = test.drop(columns=target_cols), test[target_cols]
-
-        # linear models
-        # model = sklearn.linear_model.LinearRegression()
-        model = sklearn.linear_model.ElasticNetCV(n_jobs=-1)  # very fast fitting
-        # model = sklearn.linear_model.LassoCV(n_jobs=-1)
-
-        # nonlinear models
-        # model = ELMRegressor(**{'n_neurons': 119,'ufunc': 'sigm','alpha': 0.011,'include_original_features': True,'density': 0.7,
-        # 'pairwise_metric': 'euclidean'})
-        # model, fig2 = elm_optuna_param_search(train_x, train_y, n_trials=100)
-        # model = sklearn.ensemble.RandomForestRegressor(n_jobs=-1, verbose=0, n_estimators=30)
-        # model = ExtraTreesRegressor(n_jobs=-1, n_estimators=200)
-        # model = TPOTRegressor(n_jobs=cpu_count(), max_time_seconds=60 * 30, max_eval_time_seconds=60, early_stop=3, verbose=1)
-
-        # fit the model and print metrics
-        model.fit(train_x, train_y)
-        test_pred = pd.Series(model.predict(test_x).ravel(), index=test_x.index)
-        train_pred = pd.Series(model.predict(train_x).ravel(), index=train_x.index)
-        r2 = r2_score(test_y, test_pred)
-        rmse = root_mean_squared_error(test_y, test_pred)
-        logger.info(
-            f"'{target_cols[0]}' {type(model).__name__} model: R2={r2:.3f}, RMSE={rmse:.3f}"
-        )
-
-        # shift input cols back up (shifted down in preprocessing) by the horizon so the plots are aligned
-        sample_rate_mins = train_test_df.attrs["sample_rate_mins"]
-        horizon_rows = int(model_conf.horizon_mins / sample_rate_mins)
-        input_cols = [c for c in train_test_df.columns if c not in target_cols]
-        train_test_df[input_cols] = train_test_df[input_cols].shift(-horizon_rows)
-
-        if isinstance(model, TPOTRegressor):
-            with pd.option_context(
-                "display.max_rows",
-                None,
-                "display.max_columns",
-                None,
-                "display.width",
-                400,
-                "display.max_colwidth",
-                50,
-            ):
-                # logger.info(f"TPOT All Evaluated Individuals: \n{model.evaluated_individuals}")
-                logger.info(f"Best TPOT models: \n{model.pareto_front}")
-                model.pareto_front.to_csv(
-                    f"output/{target_cols[0]}_{site}_tpot_pareto_front.csv"
-                )
-                pipeline: Pipeline = model.fitted_pipeline_
-                pickle.dump(
-                    pipeline,
-                    open(f"output/{target_cols[0]}_{site}_tpot_pipeline.pkl", "wb"),
-                )
-                # print all hyperparameters
-                for n in model.fitted_pipeline_.graph.nodes:
-                    print(n, " : ", model.fitted_pipeline_.graph.nodes[n]["instance"])
-
-        if isinstance(model, LinearModel):
-            features = dict(zip(np.round(model.coef_, 4), model.feature_names_in_))
-            features = dict(sorted(features.items(), reverse=True))
-            logger.info(f"Model coefficients: \n{pformat(features, width=200)}")
-
-        # add predictions to the original df
-        train_test_df[f"{target_cols[0]}_test_pred"] = test_pred.copy()
-        train_test_df[f"{target_cols[0]}_train_pred"] = train_pred.copy()
-        fig1 = self.plot_df(
-            train_test_df.drop(columns=lagged_cols),
-            f"Train and Test Predictions - {target_cols[0]}_{site}, {type(model).__name__} - R2={r2:.3f}, RMSE={rmse:.3f}",
-        )
-
-        # scatterplot of test_pred vs target values
-        title = (
-            f"Predictions vs Actuals  - {target_cols[0]}_{site}, {type(model).__name__}"
-        )
-        fig2 = px.scatter(x=test_y[target_cols[0]], y=test_pred.ravel(), title=title)
-        fig2.update_layout(xaxis_title="Actual", yaxis_title="Predicted")
-        fig2.data[0].name = "test"
-        fig2.add_scatter(
-            x=train_y[target_cols[0]],
-            y=model.predict(train_x).ravel(),
-            mode="markers",
-            name="train",
-        )
-
-        figs_to_html(
-            [fig1, fig2],
-            f"output/{title} - R2 score={r2:.3f}, RMSE={rmse:.3f}",
-            show=False,
-        )
-
-        # copy all attrs from the original df to the model
-        model.attrs = train_test_df.attrs
-
-        return model
-
-    def plot_df(self, df: DataFrame, title: str, out_dir: Path | None = None) -> Figure:
-        fig = px.line(df, height=1600)
-        fig.update_layout(title=title)
-        if out_dir:
-            figs_to_html([fig], out_dir / f"{title}.html", show=True)
-        return fig
-
     def run(self, site_config: HVACModelConf, start: datetime, end: datetime) -> None:
         """Main entrypoint to acquire data, train models and run gym-like simulation for a site"""
-        models: dict[SemPath | SemPaths, RegressorMixin] = {}
+        models: dict[HVACModel, RegressorMixin] = {}
         model_dfs = []
+        predictions: list[Series] = []
         for model_conf in site_config.ahu_models:
             logger.info(
                 f"Training model {model_conf.target} model for {site_config.site}"
@@ -316,14 +210,11 @@ class TrainSite:
             data: TrainingSet = get_data(streams, building, start, end)
 
             building_df = self.preprocess_data(data, site_config, model_conf, streams)
-            model = self.train_site_model(
-                [model_conf.target], building_df, site_config.site, model_conf
+            model, preds = train_site_model(
+                building_df, site_config.site, model_conf, predictions
             )
-            models[model_conf.target] = model
-            pickle.dump(
-                model,
-                open(f"output/{site_config.site}_{model_conf.target}_model.pkl", "wb"),
-            )
+            predictions.append(preds)
+            models[model_conf] = model
 
             # save the preprocessed DF from each model.  Inputs are shifted so ready for prediction.
             model_dfs.append(building_df)
@@ -343,13 +234,16 @@ class TrainSite:
         sim_df = sim_df.loc[:, ~sim_df.columns.duplicated()]
 
         # Step the models through a simulation period. Predict with each in the specified order then update the dataframe with predictions
-        self.simulate(sim_df, models, streams, site_config)
+        self.simulate(sim_df, models, site_config)
+
+        # or profile with cProfile
+        # import cProfile
+        # cProfile.runctx('self.simulate(sim_df, models, site_config)', globals(), locals(), filename='simulate.prof')
 
     def simulate(
         self,
         sim_df: DataFrame,
-        models: dict[SemPath | SemPaths, RegressorMixin],
-        streams: dict[str, dict[SemPath | SemPaths, DataFrame]],
+        models: dict[HVACModel, RegressorMixin],
         site_config: HVACModel,
     ) -> None:
         """
@@ -361,35 +255,46 @@ class TrainSite:
 
         sim_df = sim_df.dropna(how="any")
         sim_df.columns = [str(c) for c in sim_df.columns]
-        # extract target actuals for plotting later
+
+        # extract target, actuals for plotting later
         targets = [str(m.target) for m in site_config.ahu_models]
         actuals = sim_df[targets].copy()
         actuals.columns = [f"{c}_actual" for c in actuals.columns]
         sim_df = actuals.join(sim_df)  # for debugging
+        sim_df = sim_df.loc[
+            :, ~sim_df.columns.duplicated()
+        ]  # remove any duplicate columns
 
+        sim_df.to_parquet(f"output/{site_config.site}_sim_df.parquet")
         for idx, time in enumerate(
-            tqdm(sim_df.index[:200], desc="Simulating", unit="steps")
+            tqdm(sim_df.index[:500], desc="Simulating", unit="steps")
         ):
-
             all_inputs_no_lags = []
 
             for model_conf in site_config.ahu_models:
-                target = model_conf.target
+                model = models[model_conf]
 
-                model = models[target]
                 inputs = model.feature_names_in_
+                output = model_conf.output
                 model_df = sim_df[inputs]
 
-                inputs_no_lags = model.attrs["input_cols"]
+                inputs_no_lags = model.attrs["input_cols"] + [
+                    str(i) for i in model_conf.derived_inputs
+                ]
                 all_inputs_no_lags.extend(inputs_no_lags)
 
                 # set chilled water valve to square wave, cycling every N steps
-                chwv_col = "AHU|Chilled_Water_Coil|Chilled_Water_Valve|Valve_Position_Sensor_median"
-                cycle_steps = 12
-                chwv_sp = 100 if idx % cycle_steps < cycle_steps / 2 else 0
-                # logger.info(f"Setting {chwv_col} to {chwv_sp}")
+                chwv_col = str(SemPaths.ahu_chw_valve_sp.value)
+                _hwv_col = str(SemPaths.ahu_hw_valve_sp.value)
+                cycle_steps = 12 * 2
+
+                chwv_sp = 50 if idx % cycle_steps < cycle_steps / 2 else 0
                 sim_df.loc[time, chwv_col] = chwv_sp
-                # TODO set lags also
+
+                # hwv_sp = 100 if idx % cycle_steps > cycle_steps / 2 else 0
+                # sim_df.loc[time, hwv_col] = hwv_sp
+
+                # TODO set lags here also
 
                 # get the model's prediction for the next timestep.
                 # note: inputs/lags have already been down-shifted, so we can just apply prediction to the inputs at the timestamp directly.
@@ -399,13 +304,13 @@ class TrainSite:
                 # Run the prediction and update the building_df with result
                 prediction = model.predict(predict_df)
                 predict_time = time + timedelta(minutes=model_conf.horizon_mins)
-                sim_df.loc[predict_time, str(target)] = prediction
+                sim_df.loc[predict_time, str(output)] = prediction
 
         # plot the simulation results with lines
         title = f"Simulation results for {site_config.site}"
-        p = sim_df[targets + all_inputs_no_lags + list(actuals.columns)].melt(
-            ignore_index=False
-        )
+        p = sim_df[
+            targets + [str(i) for i in all_inputs_no_lags] + list(actuals.columns)
+        ].melt(ignore_index=False)
         fig = px.line(p, x=p.index, y="value", color="variable", title=title)
         figs_to_html([fig], f"output/{title}", show=True)
 
@@ -414,21 +319,27 @@ class TrainSite:
         input_streams = streams["input_streams"]
 
         def append_ahu_name(streams: DataFrame) -> DataFrame:
-            streams["ahu_point"] = (
-                streams["type_path"].str.split("|").apply(lambda x: x[0] == "AHU")
-            )
-            streams["ahu_name"] = streams.apply(
-                lambda x: x["name_path"].split("|")[0] if x["ahu_point"] else None,
-                axis=1,
-            )
+            if "type_path" in streams.columns:
+                streams["ahu_point"] = (
+                    streams["type_path"].str.split("|").apply(lambda x: x[0] == "AHU")
+                )
+            if "name_path" in streams.columns:
+                streams["ahu_name"] = streams.apply(
+                    lambda x: x["name_path"].split("|")[0] if x["ahu_point"] else None,
+                    axis=1,
+                )
             return streams
 
+        # Get list of AHUs that the target streams apply to, if any
+        target_ahus: set[str] = set()
         append_ahu_name(target_streams)
+        if "ahu_name" in target_streams.columns:
+            target_ahus = set(target_streams["ahu_name"].to_list())
+            logger.info(f"Found target AHUs: {target_ahus}")
+
+        # Get list of AHUs that the input streams apply to, if any
         for point in input_streams.keys():
             append_ahu_name(input_streams[point])
-
-        target_ahus = set(target_streams["ahu_name"].to_list())
-        logger.info(f"Found target AHUs: {target_ahus}")
 
         input_ahu_dict = {
             point: (
@@ -441,17 +352,33 @@ class TrainSite:
 
         input_ahus = [set(ahus) for ahus in input_ahu_dict.values() if ahus is not None]
 
-        # check that there are common AHUs between target and all the input streams
+        # check if there are common AHUs between target and all the input streams
+        # TODO implement per-AHU modelling where possible. This isn't used yet.
         _common_ahus = set(target_ahus).intersection(*input_ahus)
 
         return streams
 
 
-memory = Memory(Path.home() / ".pyfunc_cache")
-try:
-    memory.reduce_size(bytes_limit="1G", age_limit=timedelta(days=365))
-except ValueError:
-    pass  # workaround a bug when cache is empty
+def plot_df(df: DataFrame, title: str, out_dir: Path | None = None) -> Figure:
+    fig = px.line(df, height=1600)
+    fig.update_layout(title=title)
+    if out_dir:
+        figs_to_html([fig], out_dir / f"{title}.html", show=True)
+    return fig
+
+
+def split_df(
+    train_test_df: DataFrame, target_cols: list[str]
+) -> tuple[DataFrame, DataFrame, DataFrame, DataFrame]:
+    train_test_df.columns = [
+        str(c.name) if isinstance(c, SemPath) else str(c) for c in train_test_df.columns
+    ]
+    train_test_df = train_test_df.sort_index().dropna()
+    train, test = split_alternate_days(train_test_df, n_sets=2)
+
+    train_x, train_y = train.drop(columns=target_cols), train[target_cols]
+    test_x, test_y = test.drop(columns=target_cols), test[target_cols]
+    return train_x, train_y, test_x, test_y
 
 
 @memory.cache()
@@ -501,6 +428,7 @@ def get_data(
             end=end,
         )
         for point in streams["input_streams"].keys()
+        if "streams" in streams["input_streams"][point]
     ]
 
     # rename data columns using brick classes, and add streams to inputs dict
@@ -525,6 +453,178 @@ def get_data(
     training_set = TrainingSet(target=target_data, inputs=input_data)
 
     return training_set
+
+
+@memory.cache()
+def train_site_model(
+    train_test_df: DataFrame,
+    site: DCHBuilding,
+    model_conf: HVACModel,
+    predictions: list[Series],
+) -> RegressorMixin:
+    """
+    Train a model for a single site and model configuration
+    To allow for chained models (output of one is input to next), we return the (train+test) predictions for each model, accumulate into a list
+    and pass them back as `predictions` here for subsequent models. These are appended to any HVACModels which have matching `derived_inputs`
+    properties.
+    :param train_test_df:
+    :param site:
+    :param model_conf:
+    :param predictions: accumulated predictions from prior models.
+    :return:
+    """
+
+    target_cols = [model_conf.target.name]
+    _input_cols = train_test_df.attrs["input_cols"]
+    lagged_cols = train_test_df.attrs["lagged_cols"]
+    _sample_rate = train_test_df.attrs["sample_rate_mins"]
+    _target_col = train_test_df.attrs["target_col"]
+    _target_streams = train_test_df.attrs["streams"]["target_streams"]
+
+    train_test_df = train_test_df.resample(f"{_sample_rate}min").median().copy()
+
+    # add any derived inputs produced by previous training runs
+    if model_conf.derived_inputs:
+        predictions_df = DataFrame(pd.concat(predictions))
+        for derived_input in model_conf.derived_inputs:
+            if derived_input in predictions_df.columns:
+                train_test_df[derived_input] = predictions_df[derived_input]
+
+    unfiltered_df = train_test_df.copy()
+
+    # apply dataset filters
+    for fltr in model_conf.filters:
+        train_test_df = fltr(train_test_df, model_config=model_conf)
+
+    # split the data into training and testing sets
+    train_x, train_y, test_x, test_y = split_df(train_test_df, target_cols)
+    train_x_unfilt, train_y_unfilt, test_x_unfilt, test_y_unfilt = split_df(
+        unfiltered_df, target_cols
+    )
+
+    # linear models
+    # model = sklearn.linear_model.LinearRegression()
+    model = ElasticNetCV(n_jobs=-1)  # very fast fitting
+    # model = sklearn.linear_model.LassoCV(n_jobs=-1)
+
+    # model = PySRRegressor(
+    #     niterations=40,  # < Increase me for better results
+    #     binary_operators=["+", "*", "/", "-"],
+    #     unary_operators=["cos", "exp", "sin", "inv(x) = 1/x", ],
+    #     extra_sympy_mappings={"inv": lambda x: 1 / x},  # Define operator for SymPy as well
+    #     elementwise_loss="loss(prediction, target) = (prediction - target)^2",  # Custom loss function (julia syntax)
+    #     multithreading=True,
+    # )
+
+    # nonlinear models
+    # model = ELMRegressor(**{'n_neurons': 119,'ufunc': 'sigm','alpha': 0.011,'include_original_features': True,'density': 0.7,
+    # 'pairwise_metric': 'euclidean'})
+    # model, fig2 = elm_optuna_param_search(train_x, train_y, n_trials=100)
+    # model = sklearn.ensemble.RandomForestRegressor(n_jobs=-1, verbose=0, n_estimators=30)
+    # model = ExtraTreesRegressor(n_jobs=-1, n_estimators=200)
+    # model = TPOTRegressor(n_jobs=cpu_count(), max_time_seconds=60 * 30, max_eval_time_seconds=60, early_stop=3, verbose=1)
+
+    # fit the model and print metrics
+    model.fit(train_x, train_y.to_numpy().ravel())
+    model.feature_names_in_ = list(train_x.columns)
+    test_pred = pd.Series(model.predict(test_x).ravel(), index=test_x.index)
+    train_pred = pd.Series(model.predict(train_x).ravel(), index=train_x.index)
+
+    # also predict on the unfiltered data, so we can feed it to subsequent models
+    # TODO does this cause us to use predictions from the training set?
+    unfilt_pred = pd.concat(
+        [
+            pd.Series(
+                model.predict(train_x_unfilt[train_x.columns]).ravel(),
+                index=train_x_unfilt.index,
+            ),
+            pd.Series(
+                model.predict(test_x_unfilt[train_x.columns]).ravel(),
+                index=test_x_unfilt.index,
+            ),
+        ]
+    ).sort_index()
+    unfilt_pred.name = model_conf.output if model_conf.output else f"{target_cols[0]}"
+
+    # report accuracy
+    r2 = r2_score(test_y, test_pred)
+    rmse = root_mean_squared_error(test_y, test_pred)
+    logger.info(
+        f"'{target_cols[0]}' {type(model).__name__} model: R2={r2:.3f}, RMSE={rmse:.3f}"
+    )
+    logger.info(f"Model: {model}")
+
+    # shift input cols back up (shifted down in preprocessing) by the horizon so the plots are aligned
+    sample_rate_mins = train_test_df.attrs["sample_rate_mins"]
+    horizon_rows = int(model_conf.horizon_mins / sample_rate_mins)
+    input_cols = [c for c in train_test_df.columns if c not in target_cols]
+    train_test_df[input_cols] = train_test_df[input_cols].shift(-horizon_rows)
+
+    if isinstance(model, PySRRegressor):
+        logger.info(f"Symbolic regression models: {model.equations_}")
+    elif isinstance(model, TPOTRegressor):
+        with pd.option_context(
+            "display.max_rows",
+            None,
+            "display.max_columns",
+            None,
+            "display.width",
+            400,
+            "display.max_colwidth",
+            50,
+        ):
+            # logger.info(f"TPOT All Evaluated Individuals: \n{model.evaluated_individuals}")
+            logger.info(f"Best TPOT models: \n{model.pareto_front}")
+            model.pareto_front.to_csv(
+                f"output/{target_cols[0]}_{site}_tpot_pareto_front.csv"
+            )
+            pipeline: Pipeline = model.fitted_pipeline_
+            pickle.dump(
+                pipeline,
+                open(f"output/{target_cols[0]}_{site}_tpot_pipeline.pkl", "wb"),
+            )
+            # print all hyperparameters
+            for n in model.fitted_pipeline_.graph.nodes:
+                print(n, " : ", model.fitted_pipeline_.graph.nodes[n]["instance"])
+
+    if isinstance(model, LinearModel):
+        features = dict(zip(np.round(model.coef_, 4), model.feature_names_in_))
+        features = dict(sorted(features.items(), reverse=True))
+        coeff_str = [f"{k}: {v}" for k, v in features.items()]
+        logger.info(f"Model coefficients: \n{'\n'.join(coeff_str)}")
+
+    # add predictions to the original df
+    train_test_df[f"{target_cols[0]}_test_pred"] = test_pred.copy()
+    train_test_df[f"{target_cols[0]}_train_pred"] = train_pred.copy()
+    fig1 = plot_df(
+        train_test_df.drop(columns=lagged_cols)
+        .resample(f"{sample_rate_mins}min")
+        .first(),
+        f"Train and Test Predictions - {target_cols[0]}_{site}, {type(model).__name__} - R2={r2:.3f}, RMSE={rmse:.3f}",
+    )
+
+    # scatterplot of test_pred vs target values
+    title = f"Predictions vs Actuals  - {target_cols[0]}_{site}, {type(model).__name__}"
+    fig2 = px.scatter(x=test_y[target_cols[0]], y=test_pred.ravel(), title=title)
+    fig2.update_layout(xaxis_title="Actual", yaxis_title="Predicted")
+    fig2.data[0].name = "test"
+    fig2.add_scatter(
+        x=train_y[target_cols[0]],
+        y=model.predict(train_x).ravel(),
+        mode="markers",
+        name="train",
+    )
+
+    figs_to_html(
+        [fig1, fig2],
+        f"output/{title} - R2 score={r2:.3f}, RMSE={rmse:.3f}",
+        show=True,
+    )
+
+    # copy all attrs from the original df to the model
+    model.attrs = train_test_df.attrs
+
+    return model, unfilt_pred
 
 
 if __name__ == "__main__":
