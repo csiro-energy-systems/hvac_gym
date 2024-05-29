@@ -1,7 +1,7 @@
 from dch.dch_interface import DCHBuilding
 from dch.paths.dch_paths import SemPaths
 
-from hvac_gym.sites.model_config import HVACModel, HVACModelConf
+from hvac_gym.sites.model_config import HVACModel, HVACSiteConf
 
 """ Clayton notes:
     - fixed-speed AHU fans (just have an on-off status point),
@@ -36,7 +36,7 @@ zone_temp_model = HVACModel(
     lag_target=False,
 )
 
-model_conf = HVACModelConf(
+model_conf = HVACSiteConf(
     site=DCHBuilding("csiro", "clayton", "Building307", tz="Australia/Melbourne"),
     plot_data=False,
     sim_start_date=None,

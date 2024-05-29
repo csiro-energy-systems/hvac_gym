@@ -26,6 +26,8 @@ tpot2 = "^0.1.5a0"
 py-spy = "^0.3.14"
 pysr = "^0.18.4"
 polars = "^0.20.25"
+gymnasium = "^0.29.1"
+joblib = "^1.4.2"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -88,12 +90,32 @@ _sphinx = { cmd = "sphinx-build -b html docs/source docs/build" }
 
 # Config for various pre-commit checks are below
 # Ruff linting rules - see https://github.com/charliermarsh/ruff and https://beta.ruff.rs/docs/rules/
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+
+[tool.ruff.lint.pycodestyle]
+max-doc-length = 150
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.flake8-type-checking]
+strict = true
+runtime-evaluated-base-classes = ["pydantic.BaseModel"]
+
 [tool.ruff]
 target-version = "py39"
 line-length = 150
+fix = true
 
+[tool.ruff.lint]
+
+unfixable = ["F841"] # variable not used
+exclude = ["src/tests/**/*.py"]
 # Option 1: use basic rules only.
 select = [
+    "D", # docstring checks
     "E", # pycodestyle errors
     "W", # pycodestyle warnings
     "F", # pyflakes
@@ -105,17 +127,20 @@ select = [
     "PD", # pandas style
     "NPY", # numpy style
     "C90", # code complexity
+    "ANN" # missing doc/annotations
     #    "PL", # pylint
 ]
 
 # Add specific rule codes/groups here to ignore them, or add a '#noqa' comment to the line of code to skip all checks.
 ignore = [
     "PLR", # complexity rules
+    "D104", "D100", "D203", "D213", "D401", "D105", "D205", "D400", "D415",
+    "ANN101", "ANN002", "ANN003"
 ]
 
 # Ruff rule-specific options:
 [tool.ruff.lint.mccabe]
-max-complexity = 12 # increase max function 'complexity'
+max-complexity = 14 # increase max function 'complexity'
 
 [tool.ruff.lint.pep8-naming]
 # Allow Pydantic's `@validator` decorator to trigger class method treatment.

@@ -3,7 +3,7 @@ from dch.paths.dch_paths import SemPath, SemPaths
 from pandas import DataFrame
 from rdflib import BRICK
 
-from hvac_gym.sites.model_config import HVACModel, HVACModelConf
+from hvac_gym.sites.model_config import HVACModel, HVACSiteConf
 
 """ Newcastle notes:
     - one office AHU per zone, 15 zones, 3 levels
@@ -29,9 +29,7 @@ def chiller_off_filter(filter_df: DataFrame, model_config: HVACModel) -> DataFra
     """Removes rows where the chiller isn't consuming significant power"""
     if SemPaths.chiller_elec_power.value in model_config.inputs:
         power_col = SemPaths.chiller_elec_power.value
-        operating_power_threshold = (
-            filter_df.between_time("01:00", "02:00")[power_col].quantile(0.9) * 1.2
-        )
+        operating_power_threshold = filter_df.between_time("01:00", "02:00")[power_col].quantile(0.9) * 1.2
         not_operating_df = filter_df[filter_df[power_col] < operating_power_threshold]
         not_operating_df = not_operating_df.drop(columns=[power_col])
     return not_operating_df
@@ -61,9 +59,7 @@ zone_temp_model = HVACModel(
         SemPaths.oa_temp,
         SemPaths.ahu_oa_damper,
     ],
-    derived_inputs=[
-        ambient_zone_temp
-    ],  # predicted by the ambient_zone_temp_model above
+    derived_inputs=[ambient_zone_temp],  # predicted by the ambient_zone_temp_model above
     horizon_mins=0,
     lags=[],  # list(range(1, 7, 1)),
     lag_target=False,
@@ -86,7 +82,7 @@ ahu_chws_elec_power_model = HVACModel(
     scope=BRICK.Site,
 )
 
-model_conf = HVACModelConf(
+model_conf = HVACSiteConf(
     site=DCHBuilding("csiro", "newcastle", "Newcastle", tz="Australia/Sydney"),
     plot_data=False,
     sim_start_date="2023-10-01",  # Note: Chiller replaced in Sept 2023
@@ -97,11 +93,12 @@ model_conf = HVACModelConf(
     save_refitted_models=True,
     tpot_max_time_mins=0,
     skopt_n_hyperparam_runs=0,
+    out_dir="output",
     setpoints=[
         SemPaths.ahu_chw_valve_sp,
         SemPaths.ahu_hw_valve_sp,
-        SemPaths.ahu_sa_fan_speed_sp,
         SemPaths.ahu_oa_damper,
+        # SemPaths.ahu_sa_fan_speed_sp,
     ],
     # Warning: order is important here.  Need to specify shorter-horizon models first so that their predictions are used as inputs to
     # longer-horizon models.

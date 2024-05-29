@@ -10,17 +10,19 @@ from rdflib import BRICK, URIRef
 
 
 def normalise_sempaths(v: list[SemPath | SemPaths]) -> list[SemPath]:
+    """Normalise a list of SemPath | SemPaths to a list of SemPath"""
     return [s.value if isinstance(s, SemPaths) else s for s in v]
 
 
 def normalise_sempath(v: SemPath | SemPaths) -> SemPath:
+    """Normalise a SemPath | SemPaths to a SemPath"""
     return v.value if isinstance(v, SemPaths) else v
 
 
 class HVACModel(BaseModel):
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True
-    )  # tell pydantic to allow dataframes etc
+    """Configuration for a single HVAC prediction/regression model"""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)  # tell pydantic to allow dataframes etc
 
     # the target variable that the model predicts
     target: SemPath | SemPaths
@@ -48,10 +50,10 @@ class HVACModel(BaseModel):
     lag_target: bool = False
 
     # filters: list of functions to apply to the dataframe before training the model
-    filters: list[Callable[[DataFrame, dict[str, Any]], DataFrame] | None] = []
+    filters: list[Callable[[DataFrame, dict[Any, Any]], DataFrame] | None] = []
 
     def __hash__(self) -> int:
-        """hashes all the attributes of the model, including list elements if theattribute is a list"""
+        """Hashes all the attributes of the model, including list elements if theattribute is a list"""
         return hash(
             (
                 self.target,
@@ -66,21 +68,33 @@ class HVACModel(BaseModel):
             )
         )
 
+    def __repr__(self) -> str:
+        """Returns a string representation of the model"""
+        return f"HVACModel({self.target})"
+
     @field_validator("inputs", "derived_inputs")
     def validate_inputs(cls: Self, v: list[SemPath | SemPaths]) -> list[SemPath]:
+        """Normalise the inputs and derived_inputs to a list of SemPath"""
         return normalise_sempaths(v)
 
     @model_validator(mode="after")
     def validate_target(self: Self) -> SemPath:
+        """Normalise the target and output to a SemPath"""
         self.target = normalise_sempath(self.target)
         if self.output is None:
             self.output = self.target
         return self
 
 
-class HVACModelConf(BaseModel):
+class HVACSiteConf(BaseModel):
+    """Configuration for a HVAC site, containing one or more HVACModels."""
+
     site: DCHBuilding
+
     plot_data: bool = False
+
+    # where to save/load output files
+    out_dir: str = "output"
 
     # manually set a good starting point for the model. None to start at the beginning (after cleaning)
     # sim_start_date: datetime
@@ -120,9 +134,7 @@ class HVACModelConf(BaseModel):
     n_hyperparam_runs: int = 0
 
     # Setpoints that agents' actions can change the value of. Not all models will use all setpoints.
-    setpoints: list[
-        SemPath | SemPaths
-    ]  # = [Path.chw_valve_sp, Path.hw_valve_sp, Path.fan_speed_sp, Path.oa_damper]
+    setpoints: list[SemPath | SemPaths]  # = [Path.chw_valve_sp, Path.hw_valve_sp, Path.fan_speed_sp, Path.oa_damper]
 
     # A list of data preprocessors, to apply to all training dataframes individually just before model fitting, for special cases.
     # Preprocessors must conform to the signature:
@@ -140,7 +152,8 @@ class HVACModelConf(BaseModel):
 
     @classmethod
     @field_validator("setpoints")
-    def validate_inputs(cls, v: list[SemPath | SemPaths]) -> list[SemPath]:
+    def validate_inputs(cls: type[Self], v: list[SemPath | SemPaths]) -> list[SemPath]:
+        """Normalise the setpoints to a list of SemPath"""
         return normalise_sempaths(v)
 
     def __str__(self: Self) -> str:
@@ -219,12 +232,14 @@ class HVACModelConf(BaseModel):
     # predict_models = {**ahu_models, **power_models}
 
 
-def save_config(conf: HVACModelConf, path: Path) -> None:
+def save_config(conf: HVACSiteConf, path: Path) -> None:
+    """Save the configuration to a JSON file"""
     with open(path, "w") as f:
         f.write(conf.model_dump_json(indent=4, round_trip=True))
 
 
-def load_config(path: Path) -> HVACModelConf:
+def load_config(path: Path) -> HVACSiteConf:
+    """Load the configuration from a JSON file"""
     with open(path) as f:
-        result = HVACModelConf.model_validate_json(f.read())
+        result = HVACSiteConf.model_validate_json(f.read())
     return result  # type: ignore
