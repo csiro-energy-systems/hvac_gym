@@ -7,7 +7,8 @@ import pandas as pd
 import plotly.io as pio
 from dch.dch_interface import DCHBuilding, DCHInterface
 from dch.dch_model_utils import flatten, rename_columns
-from dch.paths.dch_paths import SemPath, SemPaths
+from dch.paths.dch_paths import SemPath
+from dch.paths.sem_paths import ahu_chw_valve_sp, ahu_hw_valve_sp
 from dch.utils.data_utils import resample_and_join_streams
 from dch.utils.init_utils import cd_project_root
 from dotenv import load_dotenv
@@ -26,7 +27,7 @@ from tqdm import tqdm
 
 from hvac_gym.config.log_config import get_logger
 from hvac_gym.sites import newcastle_config
-from hvac_gym.sites.model_config import HVACModel, HVACSiteConf
+from hvac_gym.sites.model_config import HVACModelConf, HVACSiteConf
 from hvac_gym.training.train_utils import split_alternate_days
 from hvac_gym.vis.vis_tools import figs_to_html
 
@@ -42,8 +43,10 @@ show_plots = False  # enables/disables opening plots when draw_plots==True
 pd.options.mode.chained_assignment = None
 pd.set_option("display.max_rows", 10, "display.max_columns", 20, "display.width", 200, "display.max_colwidth", 30)
 
-memory = Memory(".func_cache", verbose=0)
+func_cache_dir = Path("output/.func_cache")
+memory = Memory(func_cache_dir, verbose=1)
 memory.reduce_size(bytes_limit="1G", age_limit=timedelta(days=365))
+logger.info(f"Using function cache dir at: {func_cache_dir}")
 
 
 class TrainingData(BaseModel):
@@ -75,7 +78,7 @@ class TrainSite:
         load_dotenv()
         self.dch = DCHInterface()
 
-    def check_streams(self, model_conf: HVACModel, building: DCHBuilding) -> dict[str, dict[SemPath, DataFrame]]:
+    def check_streams(self, model_conf: HVACModelConf, building: DCHBuilding) -> dict[str, dict[SemPath, DataFrame]]:
         """Check that necessary streams exist
         :param model_conf: the model configuration
         :param building: the building to check streams for
@@ -100,7 +103,7 @@ class TrainSite:
         self,
         data_set: TrainingSet,
         site_conf: HVACSiteConf,
-        model_conf: HVACModel,
+        model_conf: HVACModelConf,
         streams: dict[str, DataFrame],
     ) -> DataFrame:
         """Preprocesses the training data for each AHU and model
@@ -115,7 +118,7 @@ class TrainSite:
         building_df, sample_rate = resample_and_join_streams([i.data[[c for c in building_cols if c in i.data.columns]] for i in inputs])
 
         # take median of each group of building data types (e.g. there's often several OAT sensors)
-        # use sempaths instances for new aggregated column names
+        # use SemPath instances for new aggregated column names
         building_stream_types = building_input_streams.groupby("type_path").aggregate({"column_name": lambda x: list(x)})
         for stream_type in building_stream_types.index:
             cols = [c for c in building_stream_types.loc[stream_type, "column_name"] if c in building_df.columns]
@@ -160,7 +163,7 @@ class TrainSite:
 
     def run(self, site_config: HVACSiteConf, start: datetime, end: datetime) -> None:
         """Main entrypoint to acquire data, train models and run gym-like simulation for a site"""
-        models: dict[HVACModel, RegressorMixin] = {}
+        models: dict[HVACModelConf, RegressorMixin] = {}
         model_dfs = []
         predictions: list[Series] = []
         for model_conf in site_config.ahu_models:
@@ -184,13 +187,13 @@ class TrainSite:
         sim_df = self.save_models_and_data(models, model_dfs, site_config)
 
         # Step the models through a simulation period. Predict with each in the specified order then update the dataframe with predictions
-        self.simulate(sim_df, models, site_config, sim_steps=1000)
+        self.simulate(sim_df, models, site_config, sim_steps=200)
 
         # or profile with cProfile
         # import cProfile
         # cProfile.runctx('self.simulate(sim_df, models, site_config)', globals(), locals(), filename='simulate.prof')
 
-    def simulate(self, sim_df: DataFrame, models: dict[HVACModel, RegressorMixin], site_config: HVACSiteConf, sim_steps: int = 500) -> None:
+    def simulate(self, sim_df: DataFrame, models: dict[HVACModelConf, RegressorMixin], site_config: HVACSiteConf, sim_steps: int = 500) -> None:
         """
         Simple gym-like simulation with the models and combined dataframe. Mainly used for manual verification that trained models interact and
         respond to actions as expected.
@@ -213,8 +216,8 @@ class TrainSite:
                 all_inputs_no_lags.extend(inputs_no_lags)
 
                 # set chilled water valve to square wave, cycling every N steps
-                chwv_col = str(SemPaths.ahu_chw_valve_sp.value)
-                _hwv_col = str(SemPaths.ahu_hw_valve_sp.value)
+                chwv_col = str(ahu_chw_valve_sp.name)
+                _hwv_col = str(ahu_hw_valve_sp.name)
                 cycle_steps = 12 * 2
 
                 chwv_sp = 100 if idx % cycle_steps < cycle_steps / 2 else 0
@@ -241,7 +244,7 @@ class TrainSite:
         actuals = [c for c in sim_df.columns if c.endswith("_actual")]
         p = sim_df[targets + [str(i) for i in all_inputs_no_lags] + list(actuals)].melt(ignore_index=False)
         fig = px.line(p, x=p.index, y="value", color="variable", title=title)
-        figs_to_html([fig], f"output/{title}", show=show_plots)
+        figs_to_html([fig], f"output/{title}", show=show_plots, verbose=1)
 
     def validate_streams(self, streams: dict[str, DataFrame]) -> dict[str, DataFrame]:
         """Validate the streams and check for common AHUs between target and input streams"""
@@ -281,7 +284,7 @@ class TrainSite:
 
         return streams
 
-    def save_models_and_data(self, models: dict[HVACModel, RegressorMixin], model_dfs: list[DataFrame], site_config: HVACSiteConf) -> DataFrame:
+    def save_models_and_data(self, models: dict[HVACModelConf, RegressorMixin], model_dfs: list[DataFrame], site_config: HVACSiteConf) -> DataFrame:
         """
         Combines dataframes from all models into a single DF that can be used for simulation, and saves it and the models to disk.
         :param models: the trained models
@@ -291,7 +294,7 @@ class TrainSite:
         """
         # save models to disk
         for model_conf, model in models.items():
-            with open(f"{site_config.out_dir}/{site_config.site}_{model_conf.target}_model.pkl", "wb") as f:
+            with open(f"{site_config.out_dir}/{site_config.site}_{model_conf.output}_model.pkl", "wb") as f:
                 pickle.dump(model, f)
 
         # combine DFs from all models
@@ -368,7 +371,7 @@ def get_data(
         end=end,
     )
     target["data"], target_streams = rename_columns(target["data"], target_streams)
-    target_streams["sem_path"] = [target_path] * len(target_streams)  # add column containing SemPath instance for later use
+    target_streams["sem_path"] = [str(target_path)] * len(target_streams)  # add column containing SemPath instance for later use
     # drop target_strems rows for which we have no columns
     target_streams = target_streams.query("column_name in @target['data'].columns")
 
@@ -390,11 +393,11 @@ def get_data(
     ]
 
     # rename data columns using brick classes, and add streams to inputs dict
-    for i, point in enumerate(streams["input_streams"].keys()):
+    for i, point in tqdm(enumerate(streams["input_streams"].keys()), desc="Getting input data", total=len(inputs)):
         inputs[i]["data"], inputs[i]["streams"] = rename_columns(inputs[i]["data"], streams["input_streams"][point])
 
         # add column containing SemPath instances for later use
-        inputs[i]["streams"]["sem_path"] = [point] * len(inputs[i]["streams"])
+        inputs[i]["streams"]["sem_path"] = [str(point)] * len(inputs[i]["streams"])
 
         # remove any stream rows that we don't have data for
         inputs[i]["streams"] = inputs[i]["streams"].query("column_name in @inputs[@i]['data'].columns")
@@ -410,7 +413,7 @@ def get_data(
 def train_site_model(
     train_test_df: DataFrame,
     site: DCHBuilding,
-    model_conf: HVACModel,
+    model_conf: HVACModelConf,
     predictions: list[Series],
 ) -> RegressorMixin:
     """
@@ -444,7 +447,7 @@ def train_site_model(
 
     # apply dataset filters
     for fltr in model_conf.filters:
-        train_test_df = fltr(train_test_df, {"model_config": model_conf})  # type: ignore
+        train_test_df = fltr(train_test_df, model_conf)
 
     # split the data into training and testing sets
     train_x, train_y, test_x, test_y = split_df(train_test_df, target_cols)

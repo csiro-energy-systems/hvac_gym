@@ -2,20 +2,16 @@ from pathlib import Path
 
 from dch.utils.init_utils import cd_project_root
 from hvac_gym.sites import newcastle_config
-from hvac_gym.sites.model_config import HVACModel, load_config, save_config
+from hvac_gym.sites.model_config import HVACModelConf, load_config, save_config
 
 cd_project_root()
 
 
 class TestConfig:
     def test_model_conf_serialisation(self) -> None:
-        m = newcastle_config.sa_temp_model
-        Path("sa_temp_model.json").write_text(
-            m.model_dump_json(indent=4, round_trip=True)
-        )
-        loaded_conf = HVACModel.model_validate_json(
-            Path("sa_temp_model.json").read_text()
-        )
+        m = newcastle_config.zone_temp_model
+        Path("zone_temp_model.json").write_text(m.model_dump_json(indent=4, round_trip=True))
+        loaded_conf = HVACModelConf.model_validate_json(Path("zone_temp_model.json").read_text())
 
         assert m == loaded_conf, "Round-tripped model should match original model"
 

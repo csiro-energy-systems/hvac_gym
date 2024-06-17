@@ -1,23 +1,28 @@
 import pickle
-from typing import Any
+from datetime import datetime, timedelta
+from typing import Any, SupportsFloat
 
-import numpy as np
 import pandas as pd
+import plotly.express as px
 from gymnasium import Env
 from gymnasium.core import ObsType
 from gymnasium.spaces import Box
-from numpy import float32
-from numpy.typing import NDArray
+from loguru import logger
 from overrides import overrides
+from pandas import DataFrame
+from plotly.graph_objs import Figure
 from sklearn.base import RegressorMixin
+from tqdm import tqdm
 
-from hvac_gym.sites.model_config import HVACModel, HVACSiteConf
+from hvac_gym.gym.hvac_agents import HVACAgent
+from hvac_gym.sites.model_config import HVACModelConf, HVACSiteConf
+from hvac_gym.vis.vis_tools import figs_to_html
 
 
-class HVACGym(Env[NDArray[float32], NDArray[float32]]):
+class HVACGym(Env[DataFrame, DataFrame]):
     """Gym environment for simulating a HVAC system."""
 
-    state: NDArray[float32]
+    state: DataFrame
 
     def __init__(self, site_config: HVACSiteConf) -> None:
         """Initializes the environment with the given configuration."""
@@ -27,10 +32,10 @@ class HVACGym(Env[NDArray[float32], NDArray[float32]]):
         site = site_config.site
         out_dir = site_config.out_dir
 
-        self.models: dict[HVACModel, RegressorMixin] = {}
+        self.models: dict[HVACModelConf, RegressorMixin] = {}
         # load models from disk
         for model_conf in site_config.ahu_models:
-            with open(f"{out_dir}/{site}_{model_conf.target}_model.pkl", "rb") as f:
+            with open(f"{out_dir}/{site}_{model_conf.output}_model.pkl", "rb") as f:
                 self.models[model_conf] = pickle.load(f)
 
         self.sim_df = pd.read_parquet(f"{out_dir}/{site}_sim_df.parquet")
@@ -39,6 +44,8 @@ class HVACGym(Env[NDArray[float32], NDArray[float32]]):
         self.all_inputs = list(pd.unique([item for sublist in inputs for item in sublist]))
 
         self.setpoints = site_config.setpoints
+
+        self.index = 0
 
         """ Initialise properties required by the gym environment: """
 
@@ -66,10 +73,11 @@ class HVACGym(Env[NDArray[float32], NDArray[float32]]):
                 the ``info`` returned by :meth:`step`.
         """
         self.state = Box(low=-1000, high=10000, shape=(len(self.all_inputs),))
+        self.index = 0
         return self.state, {}
 
     @overrides
-    def step(self, action: NDArray[float32]) -> tuple[NDArray[float32], float, bool, dict[Any, Any]]:
+    def step(self, action: DataFrame) -> tuple[ObsType, SupportsFloat, bool, dict[Any, Any]]:
         """Takes a step in the environment with the given action.
         Returns:
             observation (ObsType): An element of the environment's :attr:`observation_space` as the next observation due to the agent actions.
@@ -84,6 +92,39 @@ class HVACGym(Env[NDArray[float32], NDArray[float32]]):
                 In OpenAI Gym <v26, it contains "TimeLimit.truncated" to distinguish truncation and termination,
                 however this is deprecated in favour of returning terminated and truncated variables.
         """
+        sim_df = self.sim_df
+        models = self.models
+        idx = self.index
+        current_time = sim_df.index[idx]
+        self.index += 1
+
+        # suppress settingswithcopy warning
+        pd.options.mode.chained_assignment = None
+
+        for model_conf in self.site_config.ahu_models:
+            model = models[model_conf]
+            predict_time = current_time + timedelta(minutes=model_conf.horizon_mins)
+
+            inputs = model.feature_names_in_
+            output = model_conf.output
+            model_df = sim_df[inputs]
+
+            # set actions here
+            model_actions = action[[c for c in inputs if c in action.columns]]
+
+            model_df.loc[current_time, model_actions.columns] = model_actions.to_numpy()
+
+            # TODO set lags here also
+
+            # get the model's prediction for the next timestep.
+            # note: inputs/lags have already been down-shifted, so we can just apply prediction to the inputs at the timestamp directly.
+            # this prediction will _apply_ to timestamp + horizon_mins for the model though
+            predict_df = model_df.loc[[current_time]]
+
+            # Run the prediction and update the building_df with result
+            prediction = model.predict(predict_df)
+            sim_df.loc[predict_time, str(output)] = prediction
+
         self.state = action
         obs = self.state
         reward = 0.0
@@ -92,9 +133,23 @@ class HVACGym(Env[NDArray[float32], NDArray[float32]]):
         return obs, reward, terminated, info
 
     @overrides
-    def render(self, mode: str = "human") -> None:
+    def render(self, mode: str = "human") -> Figure:
         """Renders the environment."""
+        sim_df = self.sim_df
+        idx = self.index
+        time = sim_df.index[idx]
+        inputs_no_lags = self.all_inputs
+
         print(self.state)
+
+        # plot the simulation results
+        title = f"Simulation results for {self.site_config.site}"
+        targets = [str(m.target) for m in self.site_config.ahu_models]
+        actuals = [c for c in sim_df.columns if c.endswith("_actual")]
+        p = sim_df[targets + [str(i) for i in inputs_no_lags] + list(actuals)].query(f"index<'{time}'").melt(ignore_index=False)
+
+        fig = px.line(p, x=p.index, y="value", color="variable", title=title)
+        return fig
 
     @overrides
     def close(self) -> None:
@@ -102,12 +157,46 @@ class HVACGym(Env[NDArray[float32], NDArray[float32]]):
         pass
 
 
-if __name__ == "__main__":
-    from hvac_gym.sites import newcastle_config
-
-    site_config = newcastle_config.model_conf
-    env = HVACGym(site_config)
+def run_gym_with_agent(env: Env, agent: HVACAgent, site_config: HVACSiteConf, max_steps: int | None = None, show_plot: bool = False) -> None:
+    """Convenience method that runs a simulation of the gym environment with the specified agent
+    :param env: The gym environment to simulate
+    :param agent: The HVACAgent insstance to use in the simulation
+    :param max_steps: The maximum number of steps to simulate
+    :param show_plot: Whether to show a plot of the results
+    :param conf: The configuration of the gym environment
+    """
     env.reset()
-    env.step(np.array([0, 0, 0]))
-    env.render()
+    last_observation = None
+
+    if max_steps is None:
+        max_steps = len(env.sim_df)
+
+    step = 0
+    for step in tqdm(range(max_steps), f"Running gym simulation with agent: {agent.name}"):
+        try:
+            env.title = agent.name
+            t0 = datetime.now()
+            action = agent.act(last_observation, step)
+            observation, reward, done, infos = env.step(action)
+            last_observation = observation
+            logger.trace(f"Step {step} of {max_steps} done in {datetime.now() - t0}, observation: \n{observation}")
+
+            # if specified, show a plot of the results incrementally while running
+            if show_plot and (step % 6 == 0 or step == max_steps - 1):
+                env.render()
+
+        except KeyboardInterrupt:
+            raise
+
+    logger.info(f"Ended after {step} steps.")
+
+    """ Always save the final plot to static html for reference """
+    final_figs = env.render()
+    title = f"Simulation results for {site_config.site}"
+    figs_to_html([final_figs], f"output/{title}", show=True)
+
     env.close()
+
+
+if __name__ == "__main__":
+    pass

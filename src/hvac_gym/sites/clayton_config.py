@@ -1,7 +1,16 @@
 from dch.dch_interface import DCHBuilding
-from dch.paths.dch_paths import SemPaths
+from dch.paths.sem_paths import (
+    ahu_chw_valve_sp,
+    ahu_enable_status,
+    ahu_hw_valve_sp,
+    ahu_oa_damper,
+    ahu_room_temp,
+    ahu_sa_temp,
+    ahu_zone_temp,
+    oa_temp,
+)
 
-from hvac_gym.sites.model_config import HVACModel, HVACSiteConf
+from hvac_gym.sites.model_config import HVACModelConf, HVACSiteConf
 
 """ Clayton notes:
     - fixed-speed AHU fans (just have an on-off status point),
@@ -9,24 +18,24 @@ from hvac_gym.sites.model_config import HVACModel, HVACSiteConf
     - no zone RH sensors, so no RH models
 """
 
-sa_temp_model = HVACModel(
-    target=SemPaths.ahu_sa_temp,
+sa_temp_model = HVACModelConf(
+    target=ahu_sa_temp,
     inputs=[
-        SemPaths.ahu_zone_temp | SemPaths.ahu_room_temp,
-        SemPaths.oa_temp,
-        SemPaths.ahu_chw_valve_sp,
-        SemPaths.ahu_hw_valve_sp,
-        SemPaths.ahu_enable_status,
-        SemPaths.ahu_oa_damper,
+        ahu_zone_temp | ahu_room_temp,
+        oa_temp,
+        ahu_chw_valve_sp,
+        ahu_hw_valve_sp,
+        ahu_enable_status,
+        ahu_oa_damper,
     ],
     derived_inputs=[],  # [ModelPoint.minute_of_day, ModelPoint.day_of_week],
     horizon_mins=0,
     lags=list(range(0, 10, 1)),
     lag_target=False,
 )
-zone_temp_model = HVACModel(
-    target=SemPaths.ahu_zone_temp,
-    inputs=[SemPaths.ahu_enable_status, SemPaths.ahu_sa_temp, SemPaths.oa_temp],
+zone_temp_model = HVACModelConf(
+    target=ahu_zone_temp,
+    inputs=[ahu_enable_status, ahu_sa_temp, oa_temp],
     derived_inputs=[],  # =[ModelPoint.minute_of_day, ModelPoint.day_of_week],
     horizon_mins=10,
     lags=[
@@ -48,10 +57,10 @@ model_conf = HVACSiteConf(
     tpot_max_time_mins=0,
     skopt_n_hyperparam_runs=0,
     setpoints=[
-        SemPaths.ahu_chw_valve_sp,
-        SemPaths.ahu_hw_valve_sp,
-        SemPaths.ahu_enable_status,
-        SemPaths.ahu_oa_damper,
+        ahu_chw_valve_sp,
+        ahu_hw_valve_sp,
+        ahu_enable_status,
+        ahu_oa_damper,
     ],
     ahu_models=[sa_temp_model, zone_temp_model],
     power_models=[],

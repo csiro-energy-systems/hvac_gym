@@ -1,37 +1,27 @@
 # Created by wes148 at 1/07/2022
 from pathlib import Path
-from typing import Any, Callable, Self
+from typing import Callable, Self
 
 from dch.dch_interface import DCHBuilding
-from dch.paths.dch_paths import SemPath, SemPaths
+from dch.paths.dch_paths import SemPath
 from pandas import DataFrame
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 from rdflib import BRICK, URIRef
 
 
-def normalise_sempaths(v: list[SemPath | SemPaths]) -> list[SemPath]:
-    """Normalise a list of SemPath | SemPaths to a list of SemPath"""
-    return [s.value if isinstance(s, SemPaths) else s for s in v]
-
-
-def normalise_sempath(v: SemPath | SemPaths) -> SemPath:
-    """Normalise a SemPath | SemPaths to a SemPath"""
-    return v.value if isinstance(v, SemPaths) else v
-
-
-class HVACModel(BaseModel):
+class HVACModelConf(BaseModel):
     """Configuration for a single HVAC prediction/regression model"""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)  # tell pydantic to allow dataframes etc
 
     # the target variable that the model predicts
-    target: SemPath | SemPaths
+    target: SemPath
 
     # inputs: list of ModelPoint to use as inputs to the model
-    inputs: list[SemPath | SemPaths]
+    inputs: list[SemPath]
 
     # output: the output variable to predict. If None, the target variable is used.
-    output: SemPath | SemPaths | None = None
+    output: SemPath | None = None
 
     # horizon_mins: how far ahead to predict
     horizon_mins: int
@@ -41,7 +31,7 @@ class HVACModel(BaseModel):
     scope: URIRef | None = BRICK.AHU
 
     # derived_inputs: list of ModelPoint to derive from inputs
-    derived_inputs: list[SemPath | SemPaths] = []
+    derived_inputs: list[SemPath] = []
 
     # lags: list of lags to use for each input
     lags: list[int] = []
@@ -50,7 +40,7 @@ class HVACModel(BaseModel):
     lag_target: bool = False
 
     # filters: list of functions to apply to the dataframe before training the model
-    filters: list[Callable[[DataFrame, dict[Any, Any]], DataFrame] | None] = []
+    filters: list[Callable[[DataFrame, Self], DataFrame]] = []
 
     def __hash__(self) -> int:
         """Hashes all the attributes of the model, including list elements if theattribute is a list"""
@@ -70,17 +60,11 @@ class HVACModel(BaseModel):
 
     def __repr__(self) -> str:
         """Returns a string representation of the model"""
-        return f"HVACModel({self.target})"
-
-    @field_validator("inputs", "derived_inputs")
-    def validate_inputs(cls: Self, v: list[SemPath | SemPaths]) -> list[SemPath]:
-        """Normalise the inputs and derived_inputs to a list of SemPath"""
-        return normalise_sempaths(v)
+        return f"HVACModel(target={self.target}, output={self.output})"
 
     @model_validator(mode="after")
     def validate_target(self: Self) -> SemPath:
         """Normalise the target and output to a SemPath"""
-        self.target = normalise_sempath(self.target)
         if self.output is None:
             self.output = self.target
         return self
@@ -92,6 +76,7 @@ class HVACSiteConf(BaseModel):
     site: DCHBuilding
 
     plot_data: bool = False
+    show_plots: bool = False
 
     # where to save/load output files
     out_dir: str = "output"
@@ -134,7 +119,7 @@ class HVACSiteConf(BaseModel):
     n_hyperparam_runs: int = 0
 
     # Setpoints that agents' actions can change the value of. Not all models will use all setpoints.
-    setpoints: list[SemPath | SemPaths]  # = [Path.chw_valve_sp, Path.hw_valve_sp, Path.fan_speed_sp, Path.oa_damper]
+    setpoints: list[SemPath]  # = [Path.chw_valve_sp, Path.hw_valve_sp, Path.fan_speed_sp, Path.oa_damper]
 
     # A list of data preprocessors, to apply to all training dataframes individually just before model fitting, for special cases.
     # Preprocessors must conform to the signature:
@@ -148,13 +133,7 @@ class HVACSiteConf(BaseModel):
     # or external sensors.
     # WARNING: order is important here.  Need to specify shorter-horizon models first so that their predictions are used as inputs to
     # longer-horizon models.
-    ahu_models: list[HVACModel]
-
-    @classmethod
-    @field_validator("setpoints")
-    def validate_inputs(cls: type[Self], v: list[SemPath | SemPaths]) -> list[SemPath]:
-        """Normalise the setpoints to a list of SemPath"""
-        return normalise_sempaths(v)
+    ahu_models: list[HVACModelConf]
 
     def __str__(self: Self) -> str:
         return f"ModelConfig: {self.site}"

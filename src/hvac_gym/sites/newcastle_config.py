@@ -1,9 +1,10 @@
 from dch.dch_interface import DCHBuilding
-from dch.paths.dch_paths import SemPath, SemPaths
+from dch.paths.dch_paths import SemPath
+from dch.paths.sem_paths import ahu_chw_valve_sp, ahu_hw_valve_sp, ahu_oa_damper, ahu_sa_fan_speed, chiller_elec_power, oa_temp, zone_temp
 from pandas import DataFrame
 from rdflib import BRICK
 
-from hvac_gym.sites.model_config import HVACModel, HVACSiteConf
+from hvac_gym.sites.model_config import HVACModelConf, HVACSiteConf
 
 """ Newcastle notes:
     - one office AHU per zone, 15 zones, 3 levels
@@ -16,7 +17,7 @@ from hvac_gym.sites.model_config import HVACModel, HVACSiteConf
     - Model average zone temp as function of average valve positions, fan speeds and outside air temp
     (Ignore fan power for now - it's an order of magnitude lower than chiller power)
 """
-# Custom SemPaths:
+# Custom SemPath:
 ambient_zone_temp = SemPath(
     name="ambient_zone_temp",
     path="Ambient_Zone_Temperature",
@@ -25,21 +26,23 @@ ambient_zone_temp = SemPath(
 )
 
 
-def chiller_off_filter(filter_df: DataFrame, model_config: HVACModel) -> DataFrame:
+def chiller_off_filter(filter_df: DataFrame, model_config: HVACModelConf) -> DataFrame:
     """Removes rows where the chiller isn't consuming significant power"""
-    if SemPaths.chiller_elec_power.value in model_config.inputs:
-        power_col = SemPaths.chiller_elec_power.value
+    if chiller_elec_power in model_config:
+        power_col = chiller_elec_power.name
         operating_power_threshold = filter_df.between_time("01:00", "02:00")[power_col].quantile(0.9) * 1.2
         not_operating_df = filter_df[filter_df[power_col] < operating_power_threshold]
         not_operating_df = not_operating_df.drop(columns=[power_col])
-    return not_operating_df
+        return not_operating_df
+    else:
+        return filter_df
 
 
 """ An interim model that predicts the 'ambient_zone_temp' - ie what the zone temperature would have been without any mechanical heating or cooling
 then we feed that prediction to the zone_temp model to modify it based on the chiller power, valves, fans etc """
-ambient_zone_temp_model = HVACModel(
-    target=SemPaths.zone_temp,
-    inputs=[SemPaths.oa_temp, SemPaths.chiller_elec_power],
+ambient_zone_temp_model = HVACModelConf(
+    target=zone_temp,
+    inputs=[oa_temp, chiller_elec_power],
     output=ambient_zone_temp,
     horizon_mins=0,
     lags=[],
@@ -49,15 +52,15 @@ ambient_zone_temp_model = HVACModel(
 
 """ Simple model of average building zone temp as a function of hot/chilled water valves, fan speeds and outside air temp and the ambient_zone_temp
 from the model above."""
-zone_temp_model = HVACModel(
-    target=SemPaths.zone_temp,
+zone_temp_model = HVACModelConf(
+    target=zone_temp,
     inputs=[
-        SemPaths.chiller_elec_power,
-        SemPaths.ahu_chw_valve_sp,
-        SemPaths.ahu_hw_valve_sp,
-        SemPaths.ahu_sa_fan_speed,
-        SemPaths.oa_temp,
-        SemPaths.ahu_oa_damper,
+        chiller_elec_power,
+        ahu_chw_valve_sp,
+        ahu_hw_valve_sp,
+        ahu_sa_fan_speed,
+        oa_temp,
+        ahu_oa_damper,
     ],
     derived_inputs=[ambient_zone_temp],  # predicted by the ambient_zone_temp_model above
     horizon_mins=0,
@@ -67,13 +70,13 @@ zone_temp_model = HVACModel(
 )
 
 """ Models per-AHU electrical power, based on the AHU vs all chilled water valve positions and historical whole-site chiller power """
-ahu_chws_elec_power_model = HVACModel(
-    target=SemPaths.chiller_elec_power,
+ahu_chws_elec_power_model = HVACModelConf(
+    target=chiller_elec_power,
     inputs=[
-        SemPaths.ahu_chw_valve_sp,
-        SemPaths.oa_temp,
-        SemPaths.ahu_sa_fan_speed,
-        SemPaths.zone_temp,
+        ahu_chw_valve_sp,
+        oa_temp,
+        ahu_sa_fan_speed,
+        zone_temp,
     ],
     derived_inputs=[],
     horizon_mins=10,
@@ -95,10 +98,10 @@ model_conf = HVACSiteConf(
     skopt_n_hyperparam_runs=0,
     out_dir="output",
     setpoints=[
-        SemPaths.ahu_chw_valve_sp,
-        SemPaths.ahu_hw_valve_sp,
-        SemPaths.ahu_oa_damper,
-        # SemPaths.ahu_sa_fan_speed_sp,
+        ahu_chw_valve_sp,
+        ahu_hw_valve_sp,
+        ahu_oa_damper,
+        # ahu_sa_fan_speed_sp,
     ],
     # Warning: order is important here.  Need to specify shorter-horizon models first so that their predictions are used as inputs to
     # longer-horizon models.

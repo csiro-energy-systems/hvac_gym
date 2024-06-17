@@ -2,7 +2,25 @@
 
 Automated modelling of building HVAC and creation of reinforcement learning gym environments
 
+## Authentication
+
+Installing currently requires access to some dependencies hosted on the private csiroenergy Azure package repository.
+See [Azure Package Repo Setup](https://confluence.csiro.au/display/GEES/Poetry+Cheat+Sheet#PoetryCheatSheet-InstallFromandPublishtoourPrivatePyPiindex)
+
 ## Quick start:
+
+Check the [Authentication](#Authentication) section above, then run the following commands to install the packages and run the gym:
+
+```shell
+poetry env use path/to/python>3.9.exe
+poetry install
+
+poetry shell
+poe clean # clean any old cache files, outputs etc
+poe train  # train models
+poe example  # run simple example agent against gym
+```
+
 
 ### Tools
 If you don't already have them, install some basic dev tools
