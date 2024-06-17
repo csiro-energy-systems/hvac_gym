@@ -23,7 +23,7 @@ tqdm = "^4.66.2"
 scikit-learn = "^1.4.2"
 optuna = "^3.6.1"
 scikit-elm = {git = "https://github.com/akusok/scikit-elm.git"} # dask = {version = "^2024.4.1", extras = ["array", "dataframe", "distributed"]}
-tpot2 = "^0.1.5a0"
+#tpot2 = "^0.1.5a0"
 py-spy = "^0.3.14"
 pysr = "^0.18.4"
 polars = "^0.20.25"

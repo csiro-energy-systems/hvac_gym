@@ -4,14 +4,21 @@ Automated modelling of building HVAC and creation of reinforcement learning gym 
 
 ## Authentication
 
-Installing currently requires access to some dependencies hosted on the private csiroenergy Azure package repository.
-See [Azure Package Repo Setup](https://confluence.csiro.au/display/GEES/Poetry+Cheat+Sheet#PoetryCheatSheet-InstallFromandPublishtoourPrivatePyPiindex)
+Installing currently requires access to some dependencies hosted on the private `csiroenergy` Azure package repository.
+Please floow steps in [Azure Package Repo Setup](https://confluence.csiro.au/display/GEES/Poetry+Cheat+Sheet#PoetryCheatSheet-InstallFromandPublishtoourPrivatePyPiindex) to obtain and set an API key before proceeding.
 
 ## Quick start:
 
 Check the [Authentication](#Authentication) section above, then run the following commands to install the packages and run the gym:
 
 ```shell
+# Set up Azure package authentication (see Authentication section above)
+poetry source add pypi
+poetry source add --priority supplemental csiroenergy https://pkgs.dev.azure.com/csiro-energy/csiro-energy/_packaging/csiro-python-packages/pypi/simple/
+poetry config repositories.csiroenergy https://pkgs.dev.azure.com/csiro-energy/csiro-energy/_packaging/csiro-python-packages/pypi/upload
+poetry config http-basic.csiroenergy IDENT TOKEN
+
+# Install packages
 poetry env use path/to/python>3.9.exe
 poetry install
 
@@ -20,6 +27,7 @@ poe clean # clean any old cache files, outputs etc
 poe train  # train models
 poe example  # run simple example agent against gym
 ```
+To implement your own agent, see the simple [MinMaxCoolAg](src/hvac_gym/gym/hvac_agents.py) example agent and the [TestGym](src/tests/test_gym.py) test.
 
 
 ### Tools

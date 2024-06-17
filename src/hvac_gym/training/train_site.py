@@ -21,8 +21,6 @@ from sklearn.base import RegressorMixin
 from sklearn.linear_model import ElasticNetCV
 from sklearn.linear_model._base import LinearModel
 from sklearn.metrics import r2_score, root_mean_squared_error
-from sklearn.pipeline import Pipeline
-from tpot2 import TPOTRegressor
 from tqdm import tqdm
 
 from hvac_gym.config.log_config import get_logger
@@ -513,26 +511,26 @@ def train_site_model(
     # TODO drop unused modelling code:
     # if isinstance(model, PySRRegressor):
     #     logger.info(f"Symbolic regression models: {model.equations_}")
-    if isinstance(model, TPOTRegressor):
-        with pd.option_context(
-            "display.max_rows",
-            None,
-            "display.max_columns",
-            None,
-            "display.width",
-            400,
-            "display.max_colwidth",
-            50,
-        ):
-            logger.info(f"Best TPOT models: \n{model.pareto_front}")
-            model.pareto_front.to_csv(f"output/{target_cols[0]}_{site}_tpot_pareto_front.csv")
-            pipeline: Pipeline = model.fitted_pipeline_
-            with open(f"output/{target_cols[0]}_{site}_tpot_pipeline.pkl", "wb") as f:
-                pickle.dump(pipeline, f)
-
-            # print all hyperparameters
-            for n in model.fitted_pipeline_.graph.nodes:
-                print(n, " : ", model.fitted_pipeline_.graph.nodes[n]["instance"])
+    # if isinstance(model, TPOTRegressor):
+    #     with pd.option_context(
+    #         "display.max_rows",
+    #         None,
+    #         "display.max_columns",
+    #         None,
+    #         "display.width",
+    #         400,
+    #         "display.max_colwidth",
+    #         50,
+    #     ):
+    #         logger.info(f"Best TPOT models: \n{model.pareto_front}")
+    #         model.pareto_front.to_csv(f"output/{target_cols[0]}_{site}_tpot_pareto_front.csv")
+    #         pipeline: Pipeline = model.fitted_pipeline_
+    #         with open(f"output/{target_cols[0]}_{site}_tpot_pipeline.pkl", "wb") as f:
+    #             pickle.dump(pipeline, f)
+    #
+    #         # print all hyperparameters
+    #         for n in model.fitted_pipeline_.graph.nodes:
+    #             print(n, " : ", model.fitted_pipeline_.graph.nodes[n]["instance"])
 
     if isinstance(model, LinearModel):
         features = dict(zip(np.round(model.coef_, 4), model.feature_names_in_))
