@@ -36,13 +36,12 @@ dask = {extras = ["dataframe", "distributed"], version = "^2024.6.0"}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^6.2.3"
-Sphinx = "^4.2.0"
+Sphinx = "^7.3.7"
 sphinx-rtd-theme = "^1.0.0"
-myst-parser = "^0.15.2"
-rst-to-myst = { extras = ["sphinx"], version = "^0.3.2" }
+myst-parser = "^3.0.1"
 coverage = "^5.5"
 pip-licenses = "^3.5.2"
-pylint = "^2.11.1"
+pylint = "^3.2.3"
 pre-commit = "^2.19.0"
 pyproject-flake8 = "^0.0.1-alpha.4"
 pytest-cov = "^3.0.0"
