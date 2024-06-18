@@ -37,7 +37,6 @@ cd_project_root()
 draw_plots = False  # enables/disables plotting during training
 show_plots = False  # enables/disables opening plots when draw_plots==True
 
-
 pd.options.mode.chained_assignment = None
 pd.set_option("display.max_rows", 10, "display.max_columns", 20, "display.width", 200, "display.max_colwidth", 30)
 
@@ -342,7 +341,7 @@ def split_df(train_test_df: DataFrame, target_cols: list[str]) -> tuple[DataFram
     return train_x, train_y, test_x, test_y
 
 
-@memory.cache()
+# @memory.cache()
 def get_data(
     streams: dict[str, DataFrame],
     building: DCHBuilding,
@@ -407,7 +406,7 @@ def get_data(
     return training_set
 
 
-@memory.cache()
+# @memory.cache()
 def train_site_model(
     train_test_df: DataFrame,
     site: DCHBuilding,
@@ -445,7 +444,7 @@ def train_site_model(
 
     # apply dataset filters
     for fltr in model_conf.filters:
-        train_test_df = fltr(train_test_df, model_conf)
+        train_test_df = fltr.filter(train_test_df, model_conf)
 
     # split the data into training and testing sets
     train_x, train_y, test_x, test_y = split_df(train_test_df, target_cols)

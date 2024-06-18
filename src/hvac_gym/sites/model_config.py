@@ -15,6 +15,10 @@ class PathFilter(BaseModel):
         """Apply the filter to the dataframe before training the model"""
         raise NotImplementedError
 
+    def __hash__(self) -> int:
+        """Hash the filter by its type and all values"""
+        return hash((type(self),) + tuple(self.__dict__.values()))
+
 
 class HVACModelConf(BaseModel):
     """Configuration for a single HVAC prediction/regression model"""

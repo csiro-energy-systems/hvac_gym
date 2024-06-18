@@ -7,6 +7,13 @@ Automated modelling of building HVAC and creation of reinforcement learning gym 
 Installing currently requires access to some dependencies hosted on the private `csiroenergy` Azure package repository.
 Please floow steps in [Azure Package Repo Setup](https://confluence.csiro.au/display/GEES/Poetry+Cheat+Sheet#PoetryCheatSheet-InstallFromandPublishtoourPrivatePyPiindex) to obtain and set an API key before proceeding.
 
+You'll also need to add your Senaps and DCH API keys to a .env file in the project root:
+```shell
+cd hvac_gym
+echo SENAPS_API_KEY=XXXXXXX >> .env
+echo DCH_API_KEY=XXXXXXX >> .env
+```
+
 ## Quick start:
 
 Check the [Authentication](#Authentication) section above, then run the following commands to install the packages and run the gym:
@@ -22,12 +29,17 @@ poetry config http-basic.csiroenergy IDENT TOKEN
 poetry env use path/to/python>3.9.exe
 poetry install
 
-poetry shell
-poe clean # clean any old cache files, outputs etc
-poe train  # train models
-poe example  # run simple example agent against gym
+poetry run poe clean # clean any old cache files, outputs etc
+poetry run poe train  # train models
+poetry run poe example  # run simple example agent against gym
 ```
+
 To implement your own agent, see the simple [MinMaxCoolAg](src/hvac_gym/gym/hvac_agents.py) example agent and the [TestGym](src/tests/test_gym.py) test.
+If you don't intend to modify this code, we recommend installing this package as a dependency of your own project, rather than cloning this repo, e.g.:
+```shell
+cd your_project
+poetry add git+ssh://github.com/csiro-energy-systems/hvac_gym.git # assuming you have github ssh keys set up
+```
 
 
 ### Tools
