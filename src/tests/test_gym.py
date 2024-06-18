@@ -49,6 +49,7 @@ class TestGym:
         run_gym_with_agent(env, agent, site_config, max_steps=10, show_plot=False)
 
     @pytest.mark.manual("Long run, manual launch only")
+    @pytest.mark.integration
     def test_gym_simulate_long(self) -> None:
         """Tests a long simulation of the gym environment"""
         max_steps = 1000
