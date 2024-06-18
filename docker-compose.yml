@@ -35,7 +35,7 @@ services:
 
   test:
     image: hvac_gym
-    entrypoint: poetry run poe test
+    entrypoint: poetry run poe run unit_tests
     restart: 'no'
     # Mount local data and output dirs into container
     volumes:

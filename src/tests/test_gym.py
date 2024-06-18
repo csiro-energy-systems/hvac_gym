@@ -10,6 +10,7 @@ from hvac_gym.gym.hvac_agents import MinMaxCoolAgent
 
 
 class TestGym:
+    @pytest.mark.integration
     def test_gym_step(self) -> None:
         """Tests a single step of teh gym environment"""
         from hvac_gym.sites import newcastle_config
@@ -29,6 +30,7 @@ class TestGym:
         env.render()
         env.close()
 
+    @pytest.mark.integration
     def test_gym_simulate(self) -> None:
         """Tests a short simulation of the gym environment"""
 

@@ -89,7 +89,7 @@ jobs:
       - name: Run tests
         run: |
           poetry run pre-commit run --color never
-          poetry run poe test
+          poetry run poe run unit_tests
 
       - name: Generate docs
         run: |

@@ -90,7 +90,11 @@ clean = { shell = "rm -rf output/.func_cache .coverage .mypy_cache .pytest_cache
 clean_outputs = { shell = "rm -rf output/ results/", help = "Cleans output dirs: output/ & results/", interpreter = "posix" }
 precommit = { cmd = "poetry run pre-commit run", help = "Run pre-commit hooks" }
 lint = { cmd = "poetry run git add .pre-commit-config.yaml & pre-commit run", help = "Run pre-commit hooks" }
-test = { cmd = "poetry run pytest --cov-report html --cov-report term-missing --cov=src/ ", help = "Run unit tests with pytest" }
+
+unit_tests = { shell = 'poetry run pytest --capture=sys -m "not integration" --cov-report term-missing --cov-report html --cov=src/ --durations=0 --durations-min=5.0 --tb=native --nbmake src/ --nbmake-timeout=5000', help = "Run unit tests", interpreter = "posix" }
+int_tests = { shell = "poetry run pytest --capture=sys -m integration --cov-report term-missing --cov-report html --cov=src/ --durations=0 --durations-min=5.0 --tb=native", help = "Run integration tests", interpreter = "posix" }
+test = { shell = "poetry run pytest --capture=sys --cov-report term-missing --cov-report html --cov=src/ --durations=0 --durations-min=5.0 --tb=native --nbmake src/ --nbmake-timeout=5000", help = "Run all tests", interpreter = "posix" }
+
 publish = { cmd = "poetry publish --build --remote csiroenergy", help = "Publish the package to private pypi repo" }
 docker_build = { cmd = "docker-compose build", help = "Build the docker-compose images" }
 docker_run = { cmd = "docker-compose run run", help = "Run the main docker-compose container" }
