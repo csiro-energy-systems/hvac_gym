@@ -185,3 +185,4 @@ license-check.txt
 output/
 *.json
 .func_cache
+!output/.gitkeep

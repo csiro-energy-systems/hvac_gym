@@ -1,5 +1,8 @@
+from pathlib import Path
+
 import pytest
 from dch.paths.sem_paths import ahu_chw_valve_sp, ahu_hw_valve_sp, ahu_oa_damper
+from dch.utils.init_utils import cd_project_root
 from pandas import DataFrame
 
 from hvac_gym.sites import newcastle_config
@@ -7,6 +10,9 @@ import numpy as np
 
 from hvac_gym.gym.gym import HVACGym, run_gym_with_agent
 from hvac_gym.gym.hvac_agents import MinMaxCoolAgent
+
+cd_project_root()
+Path("output").mkdir(exist_ok=True)
 
 
 class TestGym:

@@ -5,6 +5,7 @@ from hvac_gym.sites import newcastle_config
 from hvac_gym.sites.model_config import HVACModelConf, load_config, save_config
 
 cd_project_root()
+Path("output").mkdir(exist_ok=True)
 
 
 class TestConfig:
