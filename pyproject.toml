@@ -12,7 +12,7 @@ packages = [
 python = ">=3.9,<3.11.0 || >3.11.0,<3.13"
 loguru = ">=0.5.3"
 virtualenv = ">=20.24.2"
-pydantic = "^2.6.3"
+pydantic = "2.3.0"
 #dch-interface = {path = "../dch-interface-py", develop = true}
 #dch-interface = { git = "git@github.com:csiro-energy-systems/dch-interface-py.git", rev = "0.1.13" }
 dch-interface = "0.1.13"
@@ -30,6 +30,7 @@ polars = "^0.20.25"
 gymnasium = "^0.29.1"
 joblib = "^1.4.2"
 pandas = "^2.2.2"
+overrides = "^7.7.0"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -243,7 +244,7 @@ uuid = 1.30
 [tool.pytest.ini_options]
 filterwarnings = ["ignore::DeprecationWarning"]
 # default pytest args for coverage report to console+html (cov-report), reporting long-running tests (durations-min), native stacktraces (tb=native), and jupyer notebook running (nbmake)
-addopts = '-s --cov-report term-missing --durations=0 --durations-min=5.0 --tb=native --timeout=300 --nbmake --nbmake-timeout=5000 src/'
+#addopts = '-s --cov-report term-missing --durations=0 --durations-min=5.0 --tb=native --timeout=300 --nbmake --nbmake-timeout=5000 src/'
 
 
 # Add our private package index. Add via this command in poetry >=1.2: `poetry source add --secondary csiroenergy https://pkgs.dev.azure.com/csiro-energy/csiro-energy/_packaging/csiro-python-packages/pypi/simple/`

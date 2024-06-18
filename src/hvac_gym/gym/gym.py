@@ -18,6 +18,8 @@ from hvac_gym.gym.hvac_agents import HVACAgent
 from hvac_gym.sites.model_config import HVACModelConf, HVACSiteConf
 from hvac_gym.vis.vis_tools import figs_to_html
 
+pd.set_option("display.max_rows", 15, "display.max_columns", 20, "display.width", 300, "display.precision", 3)
+
 
 class HVACGym(Env[DataFrame, DataFrame]):
     """Gym environment for simulating a HVAC system."""
@@ -146,7 +148,7 @@ class HVACGym(Env[DataFrame, DataFrame]):
         title = f"Simulation results for {self.site_config.site}"
         targets = [str(m.target) for m in self.site_config.ahu_models]
         actuals = [c for c in sim_df.columns if c.endswith("_actual")]
-        p = sim_df[targets + [str(i) for i in inputs_no_lags] + list(actuals)].query(f"index<'{time}'").melt(ignore_index=False)
+        p = sim_df[list(set(targets + [str(i) for i in inputs_no_lags] + list(actuals)))].query(f"index<'{time}'").melt(ignore_index=False)
 
         fig = px.line(p, x=p.index, y="value", color="variable", title=title)
         return fig
@@ -157,7 +159,9 @@ class HVACGym(Env[DataFrame, DataFrame]):
         pass
 
 
-def run_gym_with_agent(env: Env, agent: HVACAgent, site_config: HVACSiteConf, max_steps: int | None = None, show_plot: bool = False) -> None:
+def run_gym_with_agent(
+    env: Env[DataFrame, DataFrame], agent: HVACAgent, site_config: HVACSiteConf, max_steps: int | None = None, show_plot: bool = False
+) -> None:
     """Convenience method that runs a simulation of the gym environment with the specified agent
     :param env: The gym environment to simulate
     :param agent: The HVACAgent insstance to use in the simulation

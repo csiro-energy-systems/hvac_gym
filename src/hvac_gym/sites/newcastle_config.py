@@ -1,10 +1,13 @@
+from typing import Literal
+
 from dch.dch_interface import DCHBuilding
 from dch.paths.dch_paths import SemPath
 from dch.paths.sem_paths import ahu_chw_valve_sp, ahu_hw_valve_sp, ahu_oa_damper, ahu_sa_fan_speed, chiller_elec_power, oa_temp, zone_temp
+from overrides import overrides
 from pandas import DataFrame
-from rdflib import BRICK
+from pydantic import BaseModel
 
-from hvac_gym.sites.model_config import HVACModelConf, HVACSiteConf
+from hvac_gym.sites.model_config import HVACModelConf, HVACSiteConf, PathFilter
 
 """ Newcastle notes:
     - one office AHU per zone, 15 zones, 3 levels
@@ -26,16 +29,22 @@ ambient_zone_temp = SemPath(
 )
 
 
-def chiller_off_filter(filter_df: DataFrame, model_config: HVACModelConf) -> DataFrame:
+class ChillerOffFilter(PathFilter, BaseModel):
     """Removes rows where the chiller isn't consuming significant power"""
-    if chiller_elec_power in model_config:
-        power_col = chiller_elec_power.name
-        operating_power_threshold = filter_df.between_time("01:00", "02:00")[power_col].quantile(0.9) * 1.2
-        not_operating_df = filter_df[filter_df[power_col] < operating_power_threshold]
-        not_operating_df = not_operating_df.drop(columns=[power_col])
-        return not_operating_df
-    else:
-        return filter_df
+
+    type: Literal["ChillerOffFilter"] = "ChillerOffFilter"
+
+    @overrides
+    def filter(self, filter_df: DataFrame, hvac_model_config: HVACModelConf) -> DataFrame:
+        """Removes rows where the chiller isn't consuming significant power"""
+        if chiller_elec_power in hvac_model_config.inputs:
+            power_col = chiller_elec_power.name
+            operating_power_threshold = filter_df.between_time("01:00", "02:00")[power_col].quantile(0.9) * 1.2
+            not_operating_df = filter_df[filter_df[power_col] < operating_power_threshold]
+            not_operating_df = not_operating_df.drop(columns=[power_col])
+            return not_operating_df
+        else:
+            return filter_df
 
 
 """ An interim model that predicts the 'ambient_zone_temp' - ie what the zone temperature would have been without any mechanical heating or cooling
@@ -46,8 +55,7 @@ ambient_zone_temp_model = HVACModelConf(
     output=ambient_zone_temp,
     horizon_mins=0,
     lags=[],
-    scope=BRICK.Site,
-    filters=[chiller_off_filter],
+    filters=[ChillerOffFilter()],
 )
 
 """ Simple model of average building zone temp as a function of hot/chilled water valves, fan speeds and outside air temp and the ambient_zone_temp
@@ -66,7 +74,6 @@ zone_temp_model = HVACModelConf(
     horizon_mins=0,
     lags=[],  # list(range(1, 7, 1)),
     lag_target=False,
-    scope=BRICK.Site,
 )
 
 """ Models per-AHU electrical power, based on the AHU vs all chilled water valve positions and historical whole-site chiller power """
@@ -82,7 +89,6 @@ ahu_chws_elec_power_model = HVACModelConf(
     horizon_mins=10,
     lags=[],  # list(range(1, 7, 1)),
     lag_target=False,
-    scope=BRICK.Site,
 )
 
 model_conf = HVACSiteConf(

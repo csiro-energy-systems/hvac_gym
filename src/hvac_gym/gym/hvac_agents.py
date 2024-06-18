@@ -4,7 +4,6 @@ from dch.paths.sem_paths import (
     ahu_chw_valve_sp,
     ahu_hw_valve_sp,
     ahu_oa_damper,
-    ahu_sa_fan_speed,
 )
 from gymnasium import Env
 from gymnasium.core import ObsType
@@ -38,7 +37,6 @@ class MinMaxCoolAgent(HVACAgent):
             {
                 str(ahu_chw_valve_sp): 0,
                 str(ahu_hw_valve_sp): 0,
-                str(ahu_sa_fan_speed): 0,
                 str(ahu_oa_damper): 0,
             },
             index=[0],

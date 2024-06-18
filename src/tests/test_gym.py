@@ -1,4 +1,6 @@
 import pytest
+from dch.paths.sem_paths import ahu_chw_valve_sp, ahu_hw_valve_sp, ahu_oa_damper
+from pandas import DataFrame
 
 from hvac_gym.sites import newcastle_config
 import numpy as np
@@ -15,7 +17,15 @@ class TestGym:
         site_config = newcastle_config.model_conf
         env = HVACGym(site_config)
         env.reset()
-        env.step(np.array([0, 0, 0]))
+        action = DataFrame(
+            {
+                str(ahu_chw_valve_sp): 0,
+                str(ahu_hw_valve_sp): 0,
+                str(ahu_oa_damper): 0,
+            },
+            index=[0],
+        )
+        env.step(action)
         env.render()
         env.close()
 

@@ -1,12 +1,19 @@
 # Created by wes148 at 1/07/2022
 from pathlib import Path
-from typing import Callable, Self
+from typing import Self
 
 from dch.dch_interface import DCHBuilding
 from dch.paths.dch_paths import SemPath
 from pandas import DataFrame
 from pydantic import BaseModel, ConfigDict, model_validator
-from rdflib import BRICK, URIRef
+
+
+class PathFilter(BaseModel):
+    """Filter to apply to the dataframe before training the model"""
+
+    def filter(self, filter_df: DataFrame, hvac_model_config: "HVACModelConf") -> DataFrame:
+        """Apply the filter to the dataframe before training the model"""
+        raise NotImplementedError
 
 
 class HVACModelConf(BaseModel):
@@ -26,10 +33,6 @@ class HVACModelConf(BaseModel):
     # horizon_mins: how far ahead to predict
     horizon_mins: int
 
-    # scope: defines at what level the model is trainged and where its inputs are from.
-    # E.g. use BRICK.AHU if expecting a new model and target for each input on every AHU.
-    scope: URIRef | None = BRICK.AHU
-
     # derived_inputs: list of ModelPoint to derive from inputs
     derived_inputs: list[SemPath] = []
 
@@ -40,7 +43,7 @@ class HVACModelConf(BaseModel):
     lag_target: bool = False
 
     # filters: list of functions to apply to the dataframe before training the model
-    filters: list[Callable[[DataFrame, Self], DataFrame]] = []
+    filters: list[PathFilter] = []
 
     def __hash__(self) -> int:
         """Hashes all the attributes of the model, including list elements if theattribute is a list"""
@@ -50,7 +53,6 @@ class HVACModelConf(BaseModel):
                 tuple(self.inputs),
                 self.output,
                 self.horizon_mins,
-                self.scope,
                 tuple(self.derived_inputs),
                 tuple(self.lags),
                 self.lag_target,
