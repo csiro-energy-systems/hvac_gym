@@ -455,16 +455,6 @@ def train_site_model(
     model = ElasticNetCV(n_jobs=-1)  # very fast fitting
     # model = sklearn.linear_model.LassoCV(n_jobs=-1)
 
-    # from pysr import PySRRegressor
-    # model = PySRRegressor(
-    #     niterations=40,  # < Increase me for better results
-    #     binary_operators=["+", "*", "/", "-"],
-    #     unary_operators=["cos", "exp", "sin", "inv(x) = 1/x", ],
-    #     extra_sympy_mappings={"inv": lambda x: 1 / x},  # Define operator for SymPy as well
-    #     elementwise_loss="loss(prediction, target) = (prediction - target)^2",  # Custom loss function (julia syntax)
-    #     multithreading=True,
-    # )
-
     # nonlinear models
     # model = ELMRegressor(**{'n_neurons': 119,'ufunc': 'sigm','alpha': 0.011,'include_original_features': True,'density': 0.7,
     # 'pairwise_metric': 'euclidean'})

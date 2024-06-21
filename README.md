@@ -1,52 +1,69 @@
 # hvac_gym
 
-Automated modelling of building HVAC and creation of reinforcement learning gym environments
+Automated modelling of building HVAC and creation of reinforcement learning gym
+environments
 
 ## Authentication
 
-Installing currently requires access to some dependencies hosted on the private `csiroenergy` Azure package repository.
-Please floow steps in [Azure Package Repo Setup](https://confluence.csiro.au/display/GEES/Poetry+Cheat+Sheet#PoetryCheatSheet-InstallFromandPublishtoourPrivatePyPiindex) to obtain and set an API key before proceeding.
+Installing currently requires access to some dependencies hosted on the
+private `csiroenergy` Azure package repository.
+Please floow steps
+in [Azure Package Repo Setup](https://confluence.csiro.au/display/GEES/Poetry+Cheat+Sheet#PoetryCheatSheet-InstallFromandPublishtoourPrivatePyPiindex)
+to obtain and set an API key before proceeding.
 
 You'll also need to add your Senaps and DCH API keys to a .env file in the project root:
+
 ```shell
 cd hvac_gym
 echo SENAPS_API_KEY=XXXXXXX >> .env
 echo DCH_API_KEY=XXXXXXX >> .env
 ```
+You'll also need to request access to the CSIRO buildings in Data Clearing House (DCH). Talk to Matt Amos or Akram Hameed for access.
 
 ## Quick start:
 
-Check the [Authentication](#Authentication) section above, then run the following commands to install the packages and run the gym:
+Check the [Authentication](#Authentication) section above, then run the following
+commands to install the packages and run the gym:
 
 ```shell
+# Check your poetry version.  You'll need >=1.8.x.
+poetry --version
+
 # Set up Azure package authentication (see Authentication section above)
 poetry source add pypi
 poetry source add --priority supplemental csiroenergy https://pkgs.dev.azure.com/csiro-energy/csiro-energy/_packaging/csiro-python-packages/pypi/simple/
 poetry config repositories.csiroenergy https://pkgs.dev.azure.com/csiro-energy/csiro-energy/_packaging/csiro-python-packages/pypi/upload
-poetry config http-basic.csiroenergy IDENT TOKEN
+poetry config http-basic.csiroenergy IDENT TOKEN # Note: replace IDENT and TOKEN with your Azure credentials (see above)
 
 # Install packages
 poetry env use path/to/python>3.9.exe
 poetry install
 
+# Run poe targets for cleaning, training, and running the gym.  See [tool.poe.tasks] section in pyproject.toml for full commands.
 poetry run poe clean # clean any old cache files, outputs etc
 poetry run poe train  # train models
 poetry run poe example  # run simple example agent against gym
 ```
 
-To implement your own agent, see the simple [MinMaxCoolAg](src/hvac_gym/gym/hvac_agents.py) example agent and the [TestGym](src/tests/test_gym.py) test.
-If you don't intend to modify this code, we recommend installing this package as a dependency of your own project, rather than cloning this repo, e.g.:
+To implement your own agent, see the
+simple [MinMaxCoolAgent](src/hvac_gym/gym/hvac_agents.py) example agent and
+the [TestGym](src/tests/test_gym.py) test.
+If you don't intend to modify this code, we recommend installing this package as a
+dependency of your own project, rather than cloning this repo, e.g.:
+
 ```shell
 cd your_project
 poetry add git+ssh://github.com/csiro-energy-systems/hvac_gym.git # assuming you have github ssh keys set up
 ```
 
-
 ### Tools
+
 If you don't already have them, install some basic dev tools
 
 #### Pyenv
+
 Pyenv is a tool for managing multiple python versions on the same machine.
+
 ```shell
 # Linux & WSL:
 curl https://pyenv.run | bash # Afterwards, follow print instructions to update PATH in your ~/.bashrc and restart your shell.
@@ -64,7 +81,10 @@ pyenv install 3.x.x # install preferred python version
 ```
 
 #### Poetry
-There ae several ways to install poetry, but the pipx method is recommended. See [here](https://python-poetry.org/docs/#installation) for more details.
+
+There ae several ways to install poetry, but the pipx method is recommended.
+See [here](https://python-poetry.org/docs/#installation) for more details.
+
 ```shell
 pyenv shell 3.x.x # start a shell for any
 python -m pip install pipx # install pipx
@@ -73,7 +93,9 @@ pipx install poetry # use pipx to install poetry in a dedicated virtual env and 
 
 ### Project
 
-If cloning this repo, and the tools above are installed, run these commands to set up the environment for development:
+If cloning this repo, and the tools above are installed, run these commands to set up
+the environment for development:
+
 ```shell
 # Clone the repo
 git clone <this-repo.git>
@@ -104,7 +126,9 @@ pre-commit install
 pytest
 
 ```
+
 Other useful commands include:
+
 ```shell
 
 # generate and show html doc

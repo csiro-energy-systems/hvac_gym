@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Any, SupportsFloat
 
 import pandas as pd
-import plotly.express as px
+import plotly.graph_objects as go
 from gymnasium import Env
 from gymnasium.core import ObsType
 from gymnasium.spaces import Box
@@ -11,6 +11,7 @@ from loguru import logger
 from overrides import overrides
 from pandas import DataFrame
 from plotly.graph_objs import Figure
+from plotly.subplots import make_subplots
 from sklearn.base import RegressorMixin
 from tqdm import tqdm
 
@@ -26,8 +27,11 @@ class HVACGym(Env[DataFrame, DataFrame]):
 
     state: DataFrame
 
-    def __init__(self, site_config: HVACSiteConf) -> None:
-        """Initializes the environment with the given configuration."""
+    def __init__(self, site_config: HVACSiteConf, sim_start_date: datetime | None = None) -> None:
+        """Initializes the environment with the given configuration.
+        :param site_config: The configuration of the HVAC system
+        :param sim_start_date: The start date for the simulation, or None to just start from the beginning of the dataset
+        """
         self.site_config = site_config
         setpoints = site_config.setpoints
 
@@ -40,14 +44,20 @@ class HVACGym(Env[DataFrame, DataFrame]):
             with open(f"{out_dir}/{site}_{model_conf.output}_model.pkl", "rb") as f:
                 self.models[model_conf] = pickle.load(f)
 
+        # read the simulation dataset
         self.sim_df = pd.read_parquet(f"{out_dir}/{site}_sim_df.parquet")
+
+        # find first index >= sim_start_data, or 0 if not specified
+        self.sim_start_date = pd.to_datetime(sim_start_date) if sim_start_date else self.sim_df.index[0]
+        self.start_index = self.sim_df.index.searchsorted(self.sim_start_date, side="left")
+
+        # make copies of the sim_df, so we can plot the actuals for comparison
+        self.actuals_df = self.sim_df.copy()
 
         inputs = [model_conf.inputs for model_conf in site_config.ahu_models]
         self.all_inputs = list(pd.unique([item for sublist in inputs for item in sublist]))
 
         self.setpoints = site_config.setpoints
-
-        self.index = 0
 
         """ Initialise properties required by the gym environment: """
 
@@ -74,8 +84,11 @@ class HVACGym(Env[DataFrame, DataFrame]):
             info (dictionary):  This dictionary contains auxiliary information complementing ``observation``. It should be analogous to
                 the ``info`` returned by :meth:`step`.
         """
+        # reset the simulation state
         self.state = Box(low=-1000, high=10000, shape=(len(self.all_inputs),))
-        self.index = 0
+
+        self.index = self.start_index
+
         return self.state, {}
 
     @overrides
@@ -111,10 +124,12 @@ class HVACGym(Env[DataFrame, DataFrame]):
             output = model_conf.output
             model_df = sim_df[inputs]
 
-            # set actions here
+            # set actions here, if applicable to this model
             model_actions = action[[c for c in inputs if c in action.columns]]
-
             model_df.loc[current_time, model_actions.columns] = model_actions.to_numpy()
+
+            # set actions on sim_df also, just so they are rendered as set by the agent.
+            sim_df.loc[current_time, model_actions.columns] = model_actions.to_numpy()
 
             # TODO set lags here also
 
@@ -135,28 +150,59 @@ class HVACGym(Env[DataFrame, DataFrame]):
         return obs, reward, terminated, info
 
     @overrides
-    def render(self, mode: str = "human") -> Figure:
-        """Renders the environment."""
+    def render(self, mode: str = "human") -> list[Figure]:
+        """Renders the environment as two plotly subplots."""
         sim_df = self.sim_df
         idx = self.index
         time = sim_df.index[idx]
-        inputs_no_lags = self.all_inputs
+        inputs_no_lags = pd.unique(self.all_inputs + self.setpoints)
 
-        print(self.state)
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.1, subplot_titles=("Simulated Data", "Actual Data"))
 
         # plot the simulation results
         title = f"Simulation results for {self.site_config.site}"
         targets = [str(m.target) for m in self.site_config.ahu_models]
-        actuals = [c for c in sim_df.columns if c.endswith("_actual")]
-        p = sim_df[list(set(targets + [str(i) for i in inputs_no_lags] + list(actuals)))].query(f"index<'{time}'").melt(ignore_index=False)
+        p_sim = sim_df[list(set(targets + [str(i) for i in inputs_no_lags]))].query(f"'{self.sim_start_date}'<index and index<'{time}'").sort_index()
+        for col in p_sim.columns:
+            fig.add_trace(go.Scatter(x=p_sim.index, y=p_sim[col], name=col, mode="lines", opacity=0.8), row=1, col=1)
 
-        fig = px.line(p, x=p.index, y="value", color="variable", title=title)
-        return fig
+        # also plot the actuals for comparison
+        p_actuals = self.actuals_df.query(f"'{self.sim_start_date}'<index and index<'{time}'").sort_index()
+        for col in p_actuals.columns:
+            fig.add_trace(go.Scatter(x=p_actuals.index, y=p_actuals[col], name=col, mode="lines", opacity=0.8), row=2, col=1)
+
+        # separate legends for each subplot (see https://community.plotly.com/t/plotly-subplots-with-individual-legends/1754/25)
+        for i, yaxis in enumerate(fig.select_yaxes(), 1):
+            legend_name = f"legend{i}"
+            fig.update_layout({legend_name: dict(y=yaxis.domain[1], yanchor="top")}, showlegend=True)
+            fig.update_traces(row=i, legend=legend_name)
+
+        fig.update_layout(
+            title=title,
+            modebar_add=[
+                "v1hovermode",
+                "toggleSpikelines",
+                "drawline",
+                "hoverClosestGl2d",
+                "hoverCompareCartesian",
+                "autoScale2d",
+                "zoom2d",
+                "pan2d",
+                "resetScale2d",
+                "toImage",
+                "zoomIn2d",
+                "zoomOut2d",
+                "lasso2d",
+                "select2d",
+            ],
+        )
+
+        return [fig]
 
     @overrides
     def close(self) -> None:
         """Closes the environment."""
-        pass
+        pass  # nothing to close
 
 
 def run_gym_with_agent(
@@ -197,7 +243,7 @@ def run_gym_with_agent(
     """ Always save the final plot to static html for reference """
     final_figs = env.render()
     title = f"Simulation results for {site_config.site}"
-    figs_to_html([final_figs], f"output/{title}", show=True)
+    figs_to_html(final_figs, f"output/{title}", show=True)
 
     env.close()
 

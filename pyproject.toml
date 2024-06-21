@@ -13,16 +13,14 @@ python = ">3.11.0,<3.13"
 loguru = ">=0.5.3"
 virtualenv = ">=20.24.2"
 pydantic = "2.3.0"
-#dch-interface = {path = "../dch-interface-py", develop = true}
-#dch-interface = { git = "git@github.com:csiro-energy-systems/dch-interface-py.git", rev = "0.1.13" }
-dch-interface = "0.1.13"
 plotly = "^5.20.0"
 brickschema = {extras = ["persistence"], version = "^0.7.5"}
 panel = "^1.3.8"
 tqdm = "^4.66.2"
 scikit-learn = "^1.4.2"
 optuna = "^3.6.1"
-scikit-elm = {git = "https://github.com/akusok/scikit-elm.git"} # dask = {version = "^2024.4.1", extras = ["array", "dataframe", "distributed"]}
+scikit-elm = {git = "https://github.com/akusok/scikit-elm.git"}
+dask = {version = "^2024.4.1", extras = ["array", "dataframe", "distributed"]}
 #tpot2 = "^0.1.5a0"
 py-spy = "^0.3.14"
 pysr = "^0.18.4"
@@ -31,7 +29,11 @@ gymnasium = "^0.29.1"
 joblib = "^1.4.2"
 pandas = "^2.2.2"
 overrides = "^7.7.0"
-dask = {extras = ["dataframe", "distributed"], version = "^2024.6.0"}
+
+#dch-interface = {path = "../dch-interface-py", develop = true}
+#dch-interface = { git = "git@github.com:csiro-energy-systems/dch-interface-py.git", rev = "0.1.13" }
+dch-interface = "0.1.13"
+pendulum = "^3.0.0"
 
 
 [tool.poetry.group.dev.dependencies]

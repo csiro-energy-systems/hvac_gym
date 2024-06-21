@@ -1,15 +1,14 @@
 from pathlib import Path
 
 import pytest
-from dch.paths.sem_paths import ahu_chw_valve_sp, ahu_hw_valve_sp, ahu_oa_damper
+from dch.paths.sem_paths import ahu_chw_valve_sp, ahu_hw_valve_sp, ahu_oa_damper, ahu_sa_fan_speed
 from dch.utils.init_utils import cd_project_root
 from pandas import DataFrame
-
-from hvac_gym.sites import newcastle_config
-import numpy as np
+from pendulum import parse
 
 from hvac_gym.gym.gym import HVACGym, run_gym_with_agent
 from hvac_gym.gym.hvac_agents import MinMaxCoolAgent
+from hvac_gym.sites import newcastle_config
 
 cd_project_root()
 Path("output").mkdir(exist_ok=True)
@@ -29,6 +28,7 @@ class TestGym:
                 str(ahu_chw_valve_sp): 0,
                 str(ahu_hw_valve_sp): 0,
                 str(ahu_oa_damper): 0,
+                str(ahu_sa_fan_speed): 0,
             },
             index=[0],
         )
@@ -43,8 +43,6 @@ class TestGym:
         site_config = newcastle_config.model_conf
 
         env = HVACGym(site_config)
-        env.reset()
-
         agent = MinMaxCoolAgent(env, cycle_steps=100, cool_chwv_setpoint=100)
         run_gym_with_agent(env, agent, site_config, max_steps=10, show_plot=False)
 
@@ -53,11 +51,10 @@ class TestGym:
     def test_gym_simulate_long(self) -> None:
         """Tests a long simulation of the gym environment"""
         max_steps = 1000
+        start = parse("2023-11-01", tz="Australia/Sydney")
         site_config = newcastle_config.model_conf
 
-        env = HVACGym(site_config)
-        env.reset()
-
+        env = HVACGym(site_config, sim_start_date=start)
         agent = MinMaxCoolAgent(env, cycle_steps=100, cool_chwv_setpoint=100)
         run_gym_with_agent(env, agent, site_config, max_steps=max_steps, show_plot=False)
 
