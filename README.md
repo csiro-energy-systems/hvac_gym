@@ -36,10 +36,11 @@ poetry config repositories.csiroenergy https://pkgs.dev.azure.com/csiro-energy/c
 poetry config http-basic.csiroenergy IDENT TOKEN # Note: replace IDENT and TOKEN with your Azure credentials (see above)
 
 # Install packages
-poetry env use path/to/python>3.9.exe
+poetry env use path/to/python>=3.9.exe # replace with your python executable's path
 poetry install
 
 # Run poe targets for cleaning, training, and running the gym.  See [tool.poe.tasks] section in pyproject.toml for full commands.
+poetry run poe init # (re)set up the environment after a clone or pull
 poetry run poe clean # clean any old cache files, outputs etc
 poetry run poe train  # train models
 poetry run poe example  # run simple example agent against gym

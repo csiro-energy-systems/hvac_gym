@@ -1,6 +1,6 @@
 import pickle
 from datetime import datetime, timedelta
-from typing import Any, SupportsFloat
+from typing import Any, Callable, SupportsFloat
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -9,7 +9,7 @@ from gymnasium.core import ObsType
 from gymnasium.spaces import Box
 from loguru import logger
 from overrides import overrides
-from pandas import DataFrame
+from pandas import DataFrame, Series
 from plotly.graph_objs import Figure
 from plotly.subplots import make_subplots
 from sklearn.base import RegressorMixin
@@ -27,12 +27,15 @@ class HVACGym(Env[DataFrame, DataFrame]):
 
     state: DataFrame
 
-    def __init__(self, site_config: HVACSiteConf, sim_start_date: datetime | None = None) -> None:
+    def __init__(self, site_config: HVACSiteConf, reward_function: Callable[[Series], float], sim_start_date: datetime | None = None) -> None:
         """Initializes the environment with the given configuration.
         :param site_config: The configuration of the HVAC system
+        :param reward_function: The reward function to use in the simulation. This allows the called to customise the reward returned by the step()
+        function.  Inputs are the observations from the environment, and the output is a single float reward value.
         :param sim_start_date: The start date for the simulation, or None to just start from the beginning of the dataset
         """
         self.site_config = site_config
+        self.reward_function = reward_function
         setpoints = site_config.setpoints
 
         site = site_config.site
@@ -142,9 +145,9 @@ class HVACGym(Env[DataFrame, DataFrame]):
             prediction = model.predict(predict_df)
             sim_df.loc[predict_time, str(output)] = prediction
 
-        self.state = action
+        self.state = sim_df.loc[current_time]
         obs = self.state
-        reward = 0.0
+        reward = self.reward_function(self.state)
         terminated: bool = False
         info: dict[Any, Any] = {}
         return obs, reward, terminated, info
@@ -207,13 +210,14 @@ class HVACGym(Env[DataFrame, DataFrame]):
 
 def run_gym_with_agent(
     env: Env[DataFrame, DataFrame], agent: HVACAgent, site_config: HVACSiteConf, max_steps: int | None = None, show_plot: bool = False
-) -> None:
+) -> tuple[list[ObsType], list[float]]:
     """Convenience method that runs a simulation of the gym environment with the specified agent
     :param env: The gym environment to simulate
     :param agent: The HVACAgent insstance to use in the simulation
     :param max_steps: The maximum number of steps to simulate
     :param show_plot: Whether to show a plot of the results
     :param conf: The configuration of the gym environment
+    :return: A tuple of the observations and rewards from the simulation
     """
     env.reset()
     last_observation = None
@@ -221,6 +225,8 @@ def run_gym_with_agent(
     if max_steps is None:
         max_steps = len(env.sim_df)
 
+    rewards = []
+    observations = []
     step = 0
     for step in tqdm(range(max_steps), f"Running gym simulation with agent: {agent.name}"):
         try:
@@ -228,6 +234,10 @@ def run_gym_with_agent(
             t0 = datetime.now()
             action = agent.act(last_observation, step)
             observation, reward, done, infos = env.step(action)
+
+            observations.append(observation)
+            rewards.append(reward)
+
             last_observation = observation
             logger.trace(f"Step {step} of {max_steps} done in {datetime.now() - t0}, observation: \n{observation}")
 
@@ -246,6 +256,7 @@ def run_gym_with_agent(
     figs_to_html(final_figs, f"output/{title}", show=True)
 
     env.close()
+    return observations, rewards
 
 
 if __name__ == "__main__":

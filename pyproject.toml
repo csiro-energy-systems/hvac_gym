@@ -85,7 +85,7 @@ example_script = "hvac_gym.example:run()"
 train = { cmd = "poetry run python src/hvac_gym/training/train_site.py ", help = "Train the models" }
 example = { cmd = "poetry run python src/tests/test_gym.py", help = "Run the example script" }
 
-init = { shell = "poetry lock --no-update; poetry install --sync", help = "(Re)initialise the project, e.g. install updated dependencies (e.g. after a pull/merge)", interpreter = "posix" }
+init = { shell = "poetry lock --no-update; poetry install --sync; poetry run pre-commit install", help = "(Re)initialise the project, e.g. install updated dependencies (e.g. after a pull/merge)", interpreter = "posix" }
 run = { cmd = "poetry run python src/hvac_gym/example.py", help = "Run the project" }
 clean = { shell = "rm -rf output/.func_cache .coverage .mypy_cache .pytest_cache dist ./**/__pycache__ docs/build/ dist docs/build docs/source/_static docs/source/wpf.*.rst", help = "Clean up build artifacts", interpreter = "posix" }
 clean_outputs = { shell = "rm -rf output/ results/", help = "Cleans output dirs: output/ & results/", interpreter = "posix" }
