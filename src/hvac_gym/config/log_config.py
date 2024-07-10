@@ -14,8 +14,6 @@ from pathlib import Path
 import loguru
 from loguru import logger
 
-out_dir = "./output"
-
 # Get entry point file name as default log name
 default_log_name = Path(sys.argv[0]).stem
 default_log_name = "log" if default_log_name == "" else default_log_name
@@ -59,7 +57,7 @@ def get_logger(log_name: str = default_log_name, log_dir: str = ".") -> loguru.L
                 "format": format_str,
             },
             {
-                "sink": out_dir + f"/log{os.getpid()}.log",
+                "sink": log_dir + f"/{log_name}.log",
                 "enqueue": True,
                 "mode": "a+",
                 "level": "DEBUG",

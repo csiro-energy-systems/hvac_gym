@@ -27,7 +27,7 @@ services:
         PUBLISH_USER: ${PUBLISH_USER}
         PUBLISH_PASSWORD: ${PUBLISH_PASSWORD}
     restart: 'no'
-    entrypoint: poetry run poe run
+    entrypoint: poetry run
     volumes:
       - ./data:/usr/src/app/hvac_gym/data
       - ./output:/usr/src/app/hvac_gym/output
@@ -35,7 +35,7 @@ services:
 
   test:
     image: hvac_gym
-    entrypoint: poetry run poe test
+    entrypoint: poetry run poe unit_tests
     restart: 'no'
     # Mount local data and output dirs into container
     volumes:

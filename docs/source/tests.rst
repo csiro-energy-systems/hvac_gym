@@ -4,10 +4,18 @@ tests package
 Submodules
 ----------
 
-tests.test\_example module
---------------------------
+tests.test\_config module
+-------------------------
 
-.. automodule:: tests.test_example
+.. automodule:: tests.test_config
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+tests.test\_gym module
+----------------------
+
+.. automodule:: tests.test_gym
    :members:
    :undoc-members:
    :show-inheritance:

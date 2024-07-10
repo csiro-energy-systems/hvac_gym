@@ -1,5 +1,5 @@
-\{\{cookiecutter.project\_slug\}\} package
-==========================================
+hvac\_gym package
+=================
 
 Subpackages
 -----------
@@ -7,18 +7,11 @@ Subpackages
 .. toctree::
    :maxdepth: 4
 
-   hvac_gym.tests
-
-Submodules
-----------
-
-\{\{cookiecutter.project\_slug\}\}.example module
--------------------------------------------------
-
-.. automodule:: hvac_gym.example
-   :members:
-   :undoc-members:
-   :show-inheritance:
+   hvac_gym.config
+   hvac_gym.gym
+   hvac_gym.sites
+   hvac_gym.training
+   hvac_gym.vis
 
 Module contents
 ---------------

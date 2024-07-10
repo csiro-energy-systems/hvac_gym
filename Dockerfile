@@ -2,8 +2,8 @@
 # This is mostly just the filesystem setup. Use docker-compose for runtime stuff (eg volumes, actual entrypoints etc)
 
 ARG PROJECT_NAME=hvac_gym
-ARG POETRY_VERSION=1.5.1
-ARG PYTHON_VERSION=3.9.13
+ARG PYTHON_VERSION=3.12.1
+ARG POETRY_VERSION=1.8.3
 
 FROM python:$PYTHON_VERSION-slim
 

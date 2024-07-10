@@ -14,8 +14,8 @@ env:
   PUBLISH_USER: ${{secrets.PRIVATE_PYPI_PUBLISH_USER}}
   PUBLISH_PASSWORD: ${{secrets.PRIVATE_PYPI_PUBLISH_PASSWORD}}
 
-  PYTHON_VERSION: 3.9.13
-  POETRY_VERSION: 1.6.1
+  PYTHON_VERSION: 3.12.1
+  POETRY_VERSION: 1.8.3
 
 jobs:
   test:
@@ -89,7 +89,7 @@ jobs:
       - name: Run tests
         run: |
           poetry run pre-commit run --color never
-          poetry run poe test
+          poetry run poe unit_tests
 
       - name: Generate docs
         run: |

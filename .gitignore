@@ -179,3 +179,10 @@ license-check.txt
 
 # keep data dir, even if empty
 !data/
+*.html
+*.prof
+*.svg
+output/
+*.json
+.func_cache
+!output/.gitkeep
