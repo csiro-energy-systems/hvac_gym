@@ -2,6 +2,8 @@ import pickle
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import math
+from scipy.stats import zscore
 import numpy as np
 import pandas as pd
 import plotly.io as pio
@@ -20,11 +22,14 @@ from pydantic import BaseModel, ConfigDict
 from sklearn.base import RegressorMixin
 from sklearn.linear_model import ElasticNetCV
 from sklearn.linear_model._base import LinearModel
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.model_selection import TimeSeriesSplit, cross_val_score
 from sklearn.metrics import r2_score, root_mean_squared_error
 from tqdm import tqdm
+import optuna
 
 from hvac_gym.config.log_config import get_logger
-from hvac_gym.sites import newcastle_config
+from hvac_gym.sites import clayton_config
 from hvac_gym.sites.model_config import HVACModelConf, HVACSiteConf
 from hvac_gym.training.train_utils import split_alternate_days
 from hvac_gym.vis.vis_tools import figs_to_html
@@ -38,7 +43,8 @@ draw_plots = False  # enables/disables plotting during training
 show_plots = False  # enables/disables opening plots when draw_plots==True
 
 pd.options.mode.chained_assignment = None
-pd.set_option("display.max_rows", 10, "display.max_columns", 20, "display.width", 200, "display.max_colwidth", 30)
+pd.set_option("display.max_rows", 10, "display.max_columns", 20,
+              "display.width", 200, "display.max_colwidth", 30)
 
 func_cache_dir = Path("output/.func_cache")
 memory = Memory(func_cache_dir, verbose=1)
@@ -49,7 +55,8 @@ logger.info(f"Using function cache dir at: {func_cache_dir}")
 class TrainingData(BaseModel):
     """A set of data and metadata for a set of related streams/points"""
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)  # tell pydantic to allow dataframes etc
+    # tell pydantic to allow dataframes etc
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     data: DataFrame
     streams: DataFrame
@@ -59,7 +66,8 @@ class TrainingData(BaseModel):
 class TrainingSet(BaseModel):
     """A set of multiple `TrainingData` input and target instances for a single physical model"""
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)  # tell pydantic to allow dataframes etc
+    # tell pydantic to allow dataframes etc
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     target: TrainingData
     inputs: list[TrainingData]
@@ -84,17 +92,57 @@ class TrainSite:
         target_point = model_conf.target
         input_points = model_conf.inputs
 
-        target_stream = self.dch.find_streams_path(building, target_point, long_format=True)
-        input_streams = {point: self.dch.find_streams_path(building, point, long_format=True) for point in input_points}
+        target_stream = self.dch.find_streams_path(
+            building, target_point, long_format=True)
+        input_streams = {point: self.dch.find_streams_path(
+            building, point, long_format=True) for point in input_points}
 
-        missing_streams = ([point for point, streams in input_streams.items() if streams.empty]) + ([target_point] if target_stream.empty else [])
+        missing_streams = ([point for point, streams in input_streams.items(
+        ) if streams.empty]) + ([target_point] if target_stream.empty else [])
         if len(missing_streams) > 0:
-            logger.error(f"Missing target or input streams for {building}. Missing inputs: {missing_streams}")
+            logger.error(
+                f"Missing target or input streams for {building}. Missing inputs: {missing_streams}")
 
         return {
             "target_streams": {target_point: target_stream},
             "input_streams": input_streams,
         }
+
+    def transformation(self, column):
+        """
+        Transforms cyclic time variables (e.g., hours, days) into sine and cosine components.
+
+        :param column: a pandas Series representing a cyclic time variable.
+        :return: two pandas Series containing the sine and cosine transformations of the input column.
+        """
+
+        column = column + 1
+        max_value = column.max()
+        sin_values = [
+            math.sin((2 * np.pi * x) / (max_value + 0.00001)) for x in list(column)
+        ]
+        cos_values = [
+            math.cos((2 * np.pi * x) / (max_value + 0.00001)) for x in list(column)
+        ]
+
+        return sin_values, cos_values
+
+    def remove_outliers(self, df, z_threshold):
+        """
+        Removes outliers from a dataframe based on a z-score threshold.
+
+        :param df: DataFrame from which to remove outliers.
+        :param z_threshold: z-score threshold for identifying outliers.
+        :return: DataFrame with outliers removed.
+        """
+        df_filtered = df.copy()
+        for col in df_filtered.columns:
+            df_filtered['z_score'] = np.abs(
+                zscore(df_filtered[col].dropna(axis=0)))
+            df_filtered[col] = df_filtered[df_filtered['z_score']
+                                           < z_threshold][col]
+            df_filtered.drop('z_score', axis=1, inplace=True)
+        return df_filtered
 
     def preprocess_data(
         self,
@@ -112,17 +160,40 @@ class TrainSite:
         # concat input all streams into a dataframe
         building_input_streams = pd.concat([i.streams for i in inputs])
         building_cols = list(flatten(building_input_streams["column_name"]))
-        building_df, sample_rate = resample_and_join_streams([i.data[[c for c in building_cols if c in i.data.columns]] for i in inputs])
+        building_df, sample_rate = resample_and_join_streams(
+            [i.data[[c for c in building_cols if c in i.data.columns]] for i in inputs])
 
         # take median of each group of building data types (e.g. there's often several OAT sensors)
         # use SemPath instances for new aggregated column names
-        building_stream_types = building_input_streams.groupby("type_path").aggregate({"column_name": lambda x: list(x)})
+        building_stream_types = building_input_streams.groupby(
+            "type_path").aggregate({"column_name": lambda x: list(x)})
         for stream_type in building_stream_types.index:
-            cols = [c for c in building_stream_types.loc[stream_type, "column_name"] if c in building_df.columns]
-            sempath = building_input_streams.query("type_path == @stream_type")["sem_path"].unique()[0]
-            building_df[sempath] = building_df[cols].median(axis=1, skipna=True)
+            cols = [c for c in building_stream_types.loc[stream_type,
+                                                         "column_name"] if c in building_df.columns]
+            sempath = building_input_streams.query(
+                "type_path == @stream_type")["sem_path"].unique()[0]
+            building_df[sempath] = building_df[cols].median(
+                axis=1, skipna=True)
             # building_df[f"{stream_type}_total"] = building_df[cols].sum(axis=1, skipna=True)
             building_df = building_df.drop(columns=cols)
+
+        input_cols = list(building_df.columns)
+        target_col = model_conf.target
+
+        # self.remove_outliers(building_df, 3)
+
+        building_df["sin Hour_OD"] = self.transformation(
+            building_df.index.hour)[0]
+        building_df["cos Hour_OD"] = self.transformation(
+            building_df.index.hour)[1]
+        building_df["sin Type_OD"] = self.transformation(
+            building_df.index.weekday)[0]
+        building_df["cos Type_OD"] = self.transformation(
+            building_df.index.weekday)[1]
+        building_df["sin MOY"] = self.transformation(
+            building_df.index.month)[0]
+        building_df["cos MOY"] = self.transformation(
+            building_df.index.month)[1]
 
         input_cols = list(building_df.columns)
         target_col = model_conf.target
@@ -130,14 +201,33 @@ class TrainSite:
         # append the median of the target data to the building data
         target_cols = list(target.streams["column_name"])
         target_df = target.data[target_cols]
-        target_df = pd.DataFrame(target_df.median(axis=1), columns=[target_col])
+        target_df = pd.DataFrame(
+            target_df.median(axis=1), columns=[target_col])
         building_df = (
-            target_df.resample(f"{sample_rate}min").median().join(building_df).interpolate(limit=3, limit_direction="forward", method="linear")
+            target_df.resample(f"{sample_rate}min").median().join(building_df).interpolate(
+                limit=3, limit_direction="forward", method="linear")
         )
+
+        # add lagged columns for each input
+        exclude_cols = ['sin Minute_OD', 'cos Minute_OD',
+                        'sin Type_OD', 'cos Type_OD']
+
+        if 'ahu_enable_status' in building_df.columns:
+            building_df["ahu_enable_status"] = building_df["ahu_enable_status"].apply(
+                lambda x: int(x) if pd.notna(x) else x)
+            time_mask = ((building_df.index.time >= pd.to_datetime('18:00').time()) | (
+                building_df.index.time < pd.to_datetime('06:00').time()) & (building_df["ahu_enable_status"] == 0))
+            building_df.loc[time_mask, "ahu_chw_valve_sp"] = building_df.loc[time_mask,
+                                                                             "ahu_chw_valve_sp"].apply(lambda x: 0 if x > 0 else x)
+            if 'ahu_hw_valve_sp' in building_df.columns:
+                building_df.loc[time_mask, "ahu_hw_valve_sp"] = building_df.loc[time_mask,
+                                                                                "ahu_hw_valve_sp"].apply(lambda x: 0 if x > 0 else x)
 
         # add lagged columns for each input
         lagged_cols = []
         for col in input_cols:
+            if col in exclude_cols:
+                continue
             for lag in model_conf.lags:
                 lag_col = f"{col}_{int(lag * sample_rate)}min"
                 building_df[lag_col] = building_df[col].shift(lag)
@@ -164,17 +254,19 @@ class TrainSite:
         model_dfs = []
         predictions: list[Series] = []
         for model_conf in site_config.ahu_models:
-            logger.info(f"Training model {model_conf.target} model for {site_config.site}")
+            logger.info(
+                f"Training model {model_conf.output} model for {site_config.site}")
             building = site_config.site
 
             # Gather and preprocess data
             streams = self.check_streams(model_conf, building)
             streams = self.validate_streams(streams)
             data = get_data(streams, building, start, end)
-            building_df = self.preprocess_data(data, site_config, model_conf, streams)
+            building_df = self.preprocess_data(
+                data, site_config, model_conf, streams)
 
-            # Train and test models
-            model, preds = train_site_model(building_df, site_config.site, model_conf, predictions)
+            model, preds = train_site_model(
+                building_df, site_config.site, model_conf, predictions)
             predictions.append(preds)
             models[model_conf] = model
 
@@ -209,7 +301,8 @@ class TrainSite:
                 output = model_conf.output
                 model_df = sim_df[inputs]
 
-                inputs_no_lags = model.attrs["input_cols"] + [str(i) for i in model_conf.derived_inputs]
+                inputs_no_lags = model.attrs["input_cols"] + \
+                    [str(i) for i in model_conf.derived_inputs]
                 all_inputs_no_lags.extend(inputs_no_lags)
 
                 # set chilled water valve to square wave, cycling every N steps
@@ -232,14 +325,16 @@ class TrainSite:
 
                 # Run the prediction and update the building_df with result
                 prediction = model.predict(predict_df)
-                predict_time = time + timedelta(minutes=model_conf.horizon_mins)
+                predict_time = time + \
+                    timedelta(minutes=model_conf.horizon_mins)
                 sim_df.loc[predict_time, str(output)] = prediction
 
         # plot the simulation results with lines
         title = f"Simulation results for {site_config.site}"
         targets = [str(m.target) for m in site_config.ahu_models]
         actuals = [c for c in sim_df.columns if c.endswith("_actual")]
-        p = sim_df[targets + [str(i) for i in all_inputs_no_lags] + list(actuals)].melt(ignore_index=False)
+        p = sim_df[targets + [str(i) for i in all_inputs_no_lags] +
+                   list(actuals)].melt(ignore_index=False)
         fig = px.line(p, x=p.index, y="value", color="variable", title=title)
         figs_to_html([fig], f"output/{title}", show=show_plots, verbose=1)
 
@@ -250,10 +345,12 @@ class TrainSite:
 
         def append_ahu_name(streams: DataFrame) -> DataFrame:
             if "type_path" in streams.columns:
-                streams["ahu_point"] = streams["type_path"].str.split("|").apply(lambda x: x[0] == "AHU")
+                streams["ahu_point"] = streams["type_path"].str.split(
+                    "|").apply(lambda x: x[0] == "AHU")
             if "name_path" in streams.columns:
                 streams["ahu_name"] = streams.apply(
-                    lambda x: x["name_path"].split("|")[0] if x["ahu_point"] else None,
+                    lambda x: x["name_path"].split(
+                        "|")[0] if x["ahu_point"] else None,
                     axis=1,
                 )
             return streams
@@ -273,7 +370,8 @@ class TrainSite:
             point: (set(input_streams[point]["ahu_name"]) if "ahu_name" in input_streams[point].columns else None) for point in input_streams.keys()
         }
 
-        input_ahus = [set(ahus) for ahus in input_ahu_dict.values() if ahus is not None]
+        input_ahus = [set(ahus)
+                      for ahus in input_ahu_dict.values() if ahus is not None]
 
         # check if there are common AHUs between target and all the input streams
         # TODO implement per-AHU modelling where possible. This isn't used yet.
@@ -301,7 +399,8 @@ class TrainSite:
         sim_df = sim_df[
             sorted(
                 sim_df.columns,
-                key=lambda x: x not in [m.target for m in site_config.ahu_models],
+                key=lambda x: x not in [
+                    m.target for m in site_config.ahu_models],
             )
         ]
 
@@ -314,6 +413,9 @@ class TrainSite:
         targets = [str(m.target) for m in site_config.ahu_models]
         actuals = sim_df[targets].copy()
         actuals.columns = [f"{c}_actual" for c in actuals.columns]
+
+        # Align indices before joining
+        actuals = actuals.reindex(sim_df.index)
         sim_df = actuals.join(sim_df)  # add actuals for debugging
         sim_df = sim_df.loc[:, ~sim_df.columns.duplicated()]
 
@@ -332,7 +434,8 @@ def plot_df(df: DataFrame, title: str, out_dir: Path | None = None) -> Figure:
 
 def split_df(train_test_df: DataFrame, target_cols: list[str]) -> tuple[DataFrame, DataFrame, DataFrame, DataFrame]:
     """Split a dataframe into training and testing sets using alternate day strategy"""
-    train_test_df.columns = [str(c.name) if isinstance(c, SemPath) else str(c) for c in train_test_df.columns]
+    train_test_df.columns = [str(c.name) if isinstance(
+        c, SemPath) else str(c) for c in train_test_df.columns]
     train_test_df = train_test_df.sort_index().dropna()
     train, test = split_alternate_days(train_test_df, n_sets=2)
 
@@ -367,10 +470,13 @@ def get_data(
         start=start,
         end=end,
     )
-    target["data"], target_streams = rename_columns(target["data"], target_streams)
-    target_streams["sem_path"] = [str(target_path)] * len(target_streams)  # add column containing SemPath instance for later use
+    target["data"], target_streams = rename_columns(
+        target["data"], target_streams)
+    # add column containing SemPath instance for later use
+    target_streams["sem_path"] = [str(target_path)] * len(target_streams)
     # drop target_strems rows for which we have no columns
-    target_streams = target_streams.query("column_name in @target['data'].columns")
+    target_streams = target_streams.query(
+        "column_name in @target['data'].columns")
 
     target_data = TrainingData(
         data=target["data"],
@@ -391,15 +497,19 @@ def get_data(
 
     # rename data columns using brick classes, and add streams to inputs dict
     for i, point in tqdm(enumerate(streams["input_streams"].keys()), desc="Getting input data", total=len(inputs)):
-        inputs[i]["data"], inputs[i]["streams"] = rename_columns(inputs[i]["data"], streams["input_streams"][point])
+        inputs[i]["data"], inputs[i]["streams"] = rename_columns(
+            inputs[i]["data"], streams["input_streams"][point])
 
         # add column containing SemPath instances for later use
-        inputs[i]["streams"]["sem_path"] = [str(point)] * len(inputs[i]["streams"])
+        inputs[i]["streams"]["sem_path"] = [
+            str(point)] * len(inputs[i]["streams"])
 
         # remove any stream rows that we don't have data for
-        inputs[i]["streams"] = inputs[i]["streams"].query("column_name in @inputs[@i]['data'].columns")
+        inputs[i]["streams"] = inputs[i]["streams"].query(
+            "column_name in @inputs[@i]['data'].columns")
 
-    input_data = [TrainingData(data=i["data"], streams=i["streams"], sample_rate=i["sample_rate"]) for i in inputs]
+    input_data = [TrainingData(
+        data=i["data"], streams=i["streams"], sample_rate=i["sample_rate"]) for i in inputs]
 
     training_set = TrainingSet(target=target_data, inputs=input_data)
 
@@ -431,7 +541,8 @@ def train_site_model(
     _target_col = train_test_df.attrs["target_col"]
     _target_streams = train_test_df.attrs["streams"]["target_streams"]
 
-    train_test_df = train_test_df.resample(f"{_sample_rate}min").median().copy()
+    train_test_df = train_test_df.resample(
+        f"{_sample_rate}min").median().copy()
 
     # add any derived inputs produced by previous training runs
     if model_conf.derived_inputs:
@@ -448,7 +559,8 @@ def train_site_model(
 
     # split the data into training and testing sets
     train_x, train_y, test_x, test_y = split_df(train_test_df, target_cols)
-    train_x_unfilt, train_y_unfilt, test_x_unfilt, test_y_unfilt = split_df(unfiltered_df, target_cols)
+    train_x_unfilt, train_y_unfilt, test_x_unfilt, test_y_unfilt = split_df(
+        unfiltered_df, target_cols)
 
     # linear models
     # model = sklearn.linear_model.LinearRegression()
@@ -488,7 +600,8 @@ def train_site_model(
     # report accuracy
     r2 = r2_score(test_y, test_pred)
     rmse = root_mean_squared_error(test_y, test_pred)
-    logger.info(f"'{target_cols[0]}' {type(model).__name__} model: R2={r2:.3f}, RMSE={rmse:.3f}")
+    logger.info(
+        f"'{target_cols[0]}' {type(model).__name__} model: R2={r2:.3f}, RMSE={rmse:.3f}")
     logger.info(f"Model: {model}")
 
     # shift input cols back up (shifted down in preprocessing) by the horizon so the plots are aligned
@@ -525,7 +638,8 @@ def train_site_model(
         features = dict(zip(np.round(model.coef_, 4), model.feature_names_in_))
         features = dict(sorted(features.items(), reverse=True))
         coeff_str = [f"{k}: {v}" for k, v in features.items()]
-        logger.info(f"Model coefficients: \n{'\n'.join(coeff_str)}")
+        formatted_coeff_str = '\n'.join(coeff_str)
+        logger.info(f"Model coefficients: \n{formatted_coeff_str}")
 
     if draw_plots:
         # add predictions to the original df
@@ -533,13 +647,15 @@ def train_site_model(
         train_test_df[f"{target_cols[0]}_test_pred"] = test_pred.copy()
         train_test_df[f"{target_cols[0]}_train_pred"] = train_pred.copy()
         fig1 = plot_df(
-            train_test_df.drop(columns=lagged_cols).resample(f"{sample_rate_mins}min").first(),
+            train_test_df.drop(columns=lagged_cols).resample(
+                f"{sample_rate_mins}min").first(),
             title,
         )
 
         # scatterplot of test_pred vs target values
         title = f"Predictions vs Actuals - target={target_cols[0]}, site={site}, model={type(model).__name__}"
-        fig2 = px.scatter(x=test_y[target_cols[0]], y=test_pred.ravel(), title=title)
+        fig2 = px.scatter(x=test_y[target_cols[0]],
+                          y=test_pred.ravel(), title=title)
         fig2.update_layout(xaxis_title="Actual", yaxis_title="Predicted")
         fig2.data[0].name = "test"
         fig2.add_scatter(
@@ -566,9 +682,9 @@ if __name__ == "__main__":
     # start_date = end_date - timedelta(days=200)
 
     # fixed dates will reuse data caching
-    start_date = datetime(2023, 10, 7)
+    start_date = datetime(2023, 1, 7)
     end_date = datetime(2024, 4, 24)
 
     site = TrainSite()
-    site.run(newcastle_config.model_conf, start_date, end_date)
+    site.run(clayton_config.model_conf, start_date, end_date)
     # site.run(clayton_config.model_conf, start_date, end_date)
