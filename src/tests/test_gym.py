@@ -3,6 +3,7 @@ from pprint import pprint
 
 import pandas as pd
 import pytest
+from dch.paths.dch_paths import SemPath
 from dch.paths.sem_paths import ahu_chw_valve_sp, ahu_hw_valve_sp, ahu_oa_damper, ahu_sa_fan_speed, chiller_elec_power, zone_temp, ahu_room_temp
 from dch.utils.init_utils import cd_project_root
 from loguru import logger
@@ -15,6 +16,13 @@ from hvac_gym.sites import clayton_config
 
 cd_project_root()
 Path("output").mkdir(exist_ok=True)
+
+boiler_elec_power = SemPath(
+    name="boiler_elec_power", path=[
+        "Boiler isFedBy Electrical_Meter hasPoint Electrical_Power_Sensor[(unit=='unit:KiloW') & (electricalPhases=='ABC')]",
+        "Boiler isFedBy Electrical_Circuit isFedBy Electrical_Meter hasPoint Electrical_Power_Sensor[(unit=='unit:KiloW') & (electricalPhases=='ABC')]",
+    ],
+)
 
 
 class TestGym:
@@ -61,7 +69,7 @@ class TestGym:
         def example_reward_func(observations: Series) -> float:
             """Example (but fairly pointless) reward function.
             Replace with your own bespoke reward function calculated from anything in the observations."""
-            return float(observations[str(chiller_elec_power)] + observations[str(ahu_room_temp)])
+            return float(observations[str(Boiler_elec_power)] + observations[str(ahu_room_temp)])
 
         env = HVACGym(
             site_config, reward_function=example_reward_func, sim_start_date=start)

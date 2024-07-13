@@ -3,15 +3,15 @@ from typing import Literal
 
 from dch.dch_interface import DCHBuilding
 from dch.paths.dch_paths import SemPath
-from dch.paths.sem_paths import ahu_chw_valve_sp, ahu_hw_valve_sp, ahu_oa_damper, ahu_sa_fan_speed, oa_temp, zone_temp, ahu_room_temp, ahu_enable_status
+from dch.paths.sem_paths import ahu_chw_valve_sp, ahu_hw_valve_sp, ahu_oa_damper, ahu_sa_fan_speed, oa_temp, zone_temp, ahu_room_temp, ahu_enable_status, boiler_elec_power
 from overrides import overrides
 from pandas import DataFrame
 from pydantic import BaseModel
 
-chiller_elec_power = SemPath(
-    name="chiller_elec_power", path=[
-        "Chiller isFedBy Electrical_Meter hasPoint Electrical_Power_Sensor[(unit=='unit:KiloW') & (electricalPhases=='ABC')]",
-        "Chiller isFedBy Electrical_Circuit isFedBy Electrical_Meter hasPoint Electrical_Power_Sensor[(unit=='unit:KiloW') & (electricalPhases=='ABC')]",
+boiler_elec_power = SemPath(
+    name="boiler_elec_power", path=[
+        "Boiler isFedBy Electrical_Meter hasPoint Electrical_Power_Sensor[(unit=='unit:KiloW') & (electricalPhases=='ABC')]",
+        "Boiler isFedBy Electrical_Circuit isFedBy Electrical_Meter hasPoint Electrical_Power_Sensor[(unit=='unit:KiloW') & (electricalPhases=='ABC')]",
     ],
 )
 
@@ -35,16 +35,16 @@ ambient_zone_temp = SemPath(
 )
 
 
-class ChillerOffFilter(PathFilter, BaseModel):
-    """Removes rows where the chiller isn't consuming significant power"""
+class BoilerOffFilter(PathFilter, BaseModel):
+    """Removes rows where the boiler isn't consuming significant power"""
 
-    type: Literal["ChillerOffFilter"] = "ChillerOffFilter"
+    type: Literal["BoilerOffFilter"] = "BoilerOffFilter"
 
     @overrides
     def filter(self, filter_df: DataFrame, hvac_model_config: HVACModelConf) -> DataFrame:
-        """Removes rows where the chiller isn't consuming significant power"""
-        if chiller_elec_power in hvac_model_config.inputs:
-            power_col = chiller_elec_power.name
+        """Removes rows where the boiler isn't consuming significant power"""
+        if boiler_elec_power in hvac_model_config.inputs:
+            power_col = boiler_elec_power.name
             operating_power_threshold = filter_df.between_time(
                 "01:00", "02:00")[power_col].quantile(0.9) * 1.2
             not_operating_df = filter_df[filter_df[power_col]
@@ -56,17 +56,17 @@ class ChillerOffFilter(PathFilter, BaseModel):
 
 
 """ An interim model that predicts the 'ambient_zone_temp' - ie what the zone temperature would have been without any mechanical heating or cooling
-then we feed that prediction to the zone_temp model to modify it based on the chiller power, valves, fans etc """
+then we feed that prediction to the zone_temp model to modify it based on the boiler power, valves, fans etc """
 ambient_zone_temp_model = HVACModelConf(
     target=ahu_room_temp,
     inputs=[
         oa_temp,
-        chiller_elec_power
+        boiler_elec_power,
     ],
     output=ambient_zone_temp,
     horizon_mins=0,
     lags=[],
-    filters=[ChillerOffFilter()],
+    filters=[BoilerOffFilter()],
 )
 
 """ Simple model of average building zone temp as a function of hot/chilled water valves, fan speeds and outside air temp and the ambient_zone_temp
@@ -74,7 +74,7 @@ from the model above."""
 zone_temp_model = HVACModelConf(
     target=ahu_room_temp,
     inputs=[
-        chiller_elec_power,
+        boiler_elec_power,
         ahu_chw_valve_sp,
         ahu_hw_valve_sp,
         #    ahu_sa_fan_speed,
@@ -85,13 +85,13 @@ zone_temp_model = HVACModelConf(
     # predicted by the ambient_zone_temp_model above
     derived_inputs=[ambient_zone_temp],
     horizon_mins=0,
-    lags=[],  # list(range(1, 7, 1)),
+    lags=list(range(1, 7, 1)),  # list(range(1, 7, 1)),
     lag_target=False,
 )
 
 """ Models per-AHU electrical power, based on the AHU vs all chilled water valve positions and historical whole-site chiller power """
-ahu_chws_elec_power_model = HVACModelConf(
-    target=chiller_elec_power,
+ahu_hws_elec_power_model = HVACModelConf(
+    target=boiler_elec_power,
     inputs=[
         ahu_chw_valve_sp,
         ahu_hw_valve_sp,
@@ -102,7 +102,7 @@ ahu_chws_elec_power_model = HVACModelConf(
     ],
     derived_inputs=[],
     horizon_mins=10,
-    lags=[],  # list(range(1, 7, 1)),
+    lags=list(range(1, 7, 1)),  # list(range(1, 7, 1)),
     lag_target=False,
 )
 
@@ -130,7 +130,7 @@ model_conf = HVACSiteConf(
     ahu_models=[
         ambient_zone_temp_model,
         zone_temp_model,
-        #    ahu_chws_elec_power_model,
+        ahu_hws_elec_power_model,
     ],
 )
 
