@@ -116,6 +116,11 @@ class HVACGym(Env[DataFrame, DataFrame]):
         current_time = sim_df.index[idx]
         self.index += 1
 
+        if self.index > len(sim_df) - 1:
+            raise ValueError(
+                f"Reached end of simulation data at index {self.index}, timestamp: {current_time}. Please reset() the gym before calling step()."
+            )
+
         # suppress settingswithcopy warning
         pd.options.mode.chained_assignment = None
 
@@ -148,7 +153,7 @@ class HVACGym(Env[DataFrame, DataFrame]):
         self.state = sim_df.loc[current_time]
         obs = self.state
         reward = self.reward_function(self.state)
-        terminated: bool = False
+        terminated: bool = self.index >= len(sim_df) - 1
         info: dict[Any, Any] = {}
         return obs, reward, terminated, info
 
@@ -165,7 +170,9 @@ class HVACGym(Env[DataFrame, DataFrame]):
         # plot the simulation results
         title = f"Simulation results for {self.site_config.site}"
         targets = [str(m.target) for m in self.site_config.ahu_models]
-        p_sim = sim_df[list(set(targets + [str(i) for i in inputs_no_lags]))].query(f"'{self.sim_start_date}'<index and index<'{time}'").sort_index()
+        targets_and_inputs = [c for c in list(set(targets + [str(i) for i in inputs_no_lags])) if c in sim_df.columns]
+
+        p_sim = sim_df[targets_and_inputs].query(f"'{self.sim_start_date}'<index and index<'{time}'").sort_index()
         for col in p_sim.columns:
             fig.add_trace(go.Scatter(x=p_sim.index, y=p_sim[col], name=col, mode="lines", opacity=0.8), row=1, col=1)
 
@@ -244,6 +251,10 @@ def run_gym_with_agent(
             # if specified, show a plot of the results incrementally while running
             if show_plot and (step % 6 == 0 or step == max_steps - 1):
                 env.render()
+
+            if done:
+                logger.info(f"Reached end of simulation data at index {step}, timestamp: {env.sim_df.index[step]}.")
+                break
 
         except KeyboardInterrupt:
             raise

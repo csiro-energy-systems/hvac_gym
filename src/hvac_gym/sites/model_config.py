@@ -1,6 +1,6 @@
 # Created by wes148 at 1/07/2022
 from pathlib import Path
-from typing import Self
+from typing import Any, Self
 
 from dch.dch_interface import DCHBuilding
 from dch.paths.dch_paths import SemPath
@@ -48,6 +48,12 @@ class HVACModelConf(BaseModel):
 
     # filters: list of functions to apply to the dataframe before training the model
     filters: list[PathFilter] = []
+
+    # data frame for this model.  Added during training.
+    dataframe: DataFrame = None
+
+    # metadata for data frame.  Added during training.
+    df_attrs: dict[str, Any] = {}
 
     def __hash__(self) -> int:
         """Hashes all the attributes of the model, including list elements if theattribute is a list"""

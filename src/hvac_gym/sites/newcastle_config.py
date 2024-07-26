@@ -2,7 +2,16 @@ from typing import Literal
 
 from dch.dch_interface import DCHBuilding
 from dch.paths.dch_paths import SemPath
-from dch.paths.sem_paths import ahu_chw_valve_sp, ahu_hw_valve_sp, ahu_oa_damper, ahu_sa_fan_speed, chiller_elec_power, oa_temp, zone_temp
+from dch.paths.sem_paths import (
+    ahu_chw_valve_sp,
+    ahu_hw_valve_sp,
+    ahu_oa_damper,
+    ahu_sa_fan_speed,
+    ahu_sa_fan_speed_sp,
+    chiller_elec_power,
+    oa_temp,
+    zone_temp,
+)
 from overrides import overrides
 from pandas import DataFrame
 from pydantic import BaseModel
@@ -107,7 +116,7 @@ model_conf = HVACSiteConf(
         ahu_chw_valve_sp,
         ahu_hw_valve_sp,
         ahu_oa_damper,
-        # ahu_sa_fan_speed_sp,
+        ahu_sa_fan_speed_sp,
     ],
     # Warning: order is important here.  Need to specify shorter-horizon models first so that their predictions are used as inputs to
     # longer-horizon models.

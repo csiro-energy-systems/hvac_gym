@@ -721,14 +721,12 @@ pyarrow = ">=7.0.0"
 
 [[package]]
 name = "dch-interface"
-version = "0.1.13"
+version = "0.1.14"
 description = "This library exposes Data Clearinghouse (DCH) and Senaps API endpoints as python code, and provides various helper functions."
 optional = false
 python-versions = ">=3.9,<3.13"
-files = [
-    {file = "dch_interface-0.1.13-py3-none-any.whl", hash = "sha256:4a91dae38b4454fa963c84a1814b3bb261da807b8f2c704cd3de2d172fb8ea83"},
-    {file = "dch_interface-0.1.13.tar.gz", hash = "sha256:e411a21d5daaf2b9e0cb825494f501e1e9fb4b7bc9fde3141d8755bc9f0bf7f1"},
-]
+files = []
+develop = true
 
 [package.dependencies]
 brickschema = ">=0.7.1"
@@ -741,15 +739,14 @@ pyarrow = ">=15.0.2"
 pydantic = ">=2.3.0"
 python-dotenv = ">=0.20.0"
 pyvis = ">=0.3.2"
-scipy = ">=1.13.1,<2.0.0"
+scipy = "^1.13.1"
 senaps-api-client = "2.16.1a0"
 tblib = ">=3.0.0"
 tqdm = ">=4.66.2"
 
 [package.source]
-type = "legacy"
-url = "https://pkgs.dev.azure.com/csiro-energy/csiro-energy/_packaging/csiro-python-packages/pypi/simple"
-reference = "csiroenergy"
+type = "directory"
+url = "../dch-interface-py"
 
 [[package]]
 name = "debugpy"
@@ -4541,7 +4538,10 @@ files = [
 docs = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "sphinx (<7.2.5)", "sphinx (>=3.5)", "sphinx-lint"]
 testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "pytest (>=6)", "pytest-black (>=0.3.7)", "pytest-checkdocs (>=2.4)", "pytest-cov", "pytest-enabler (>=2.2)", "pytest-ignore-flaky", "pytest-mypy (>=0.9.1)", "pytest-ruff"]
 
+[extras]
+dch = ["dch-interface"]
+
 [metadata]
 lock-version = "2.0"
 python-versions = ">3.11.0,<3.13"
-content-hash = "2d1a37809b64c04e10f11ed2ef5a3c1c0a3ed6e929ac4d08569c58b4f73c7dde"
+content-hash = "9f8ef2940607a7adc7a402a16501e13ac075075f8ac93485cbf9425b4f5c53af"

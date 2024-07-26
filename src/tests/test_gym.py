@@ -54,7 +54,7 @@ class TestGym:
     def test_gym_simulate_long(self) -> None:
         """Tests a long simulation of the gym environment"""
         max_steps = 1000
-        start = parse("2023-11-01", tz="Australia/Sydney")
+        start = parse("2023-10-01", tz="Australia/Sydney")
         site_config = newcastle_config.model_conf
 
         def example_reward_func(observations: Series) -> float:

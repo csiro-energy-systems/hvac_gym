@@ -18,7 +18,9 @@ cd hvac_gym
 echo SENAPS_API_KEY=XXXXXXX >> .env
 echo DCH_API_KEY=XXXXXXX >> .env
 ```
-You'll also need to request access to the CSIRO buildings in Data Clearing House (DCH). Talk to Matt Amos or Akram Hameed for access.
+
+You'll also need to request access to the CSIRO buildings in Data Clearing House (DCH). Talk to Matt Amos or Akram
+Hameed for access.
 
 ## Quick start:
 
