@@ -544,7 +544,7 @@ def train_site_model(
         )
 
         # scatterplot of test_pred vs target values
-        title = f"Predictions vs Actuals - target={target_cols[0]}, site={site}, model={type(model).__name__}"
+        title = f"Predictions vs Actuals - target={output_col}, site={site}, model={type(model).__name__}"
         fig2 = px.scatter(x=test_y[target_cols[0]], y=test_pred, title=title)
         fig2.update_layout(xaxis_title="Actual", yaxis_title="Predicted")
         fig2.data[0].name = "test"

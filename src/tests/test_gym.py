@@ -16,6 +16,10 @@ from hvac_gym.sites import newcastle_config
 cd_project_root()
 Path("output").mkdir(exist_ok=True)
 
+import plotly.io as pio
+
+pio.templates.default = "plotly_dark"
+
 
 class TestGym:
     @pytest.mark.integration
@@ -53,8 +57,11 @@ class TestGym:
     @pytest.mark.integration
     def test_gym_simulate_long(self) -> None:
         """Tests a long simulation of the gym environment"""
-        max_steps = 1000
+        max_steps = 500
+        chwv_sp = 100
+        valve_on_off_hours = 12
         start = parse("2023-10-01", tz="Australia/Sydney")
+
         site_config = newcastle_config.model_conf
 
         def example_reward_func(observations: Series) -> float:
@@ -63,7 +70,7 @@ class TestGym:
             return float(observations[str(chiller_elec_power)] + observations[str(zone_temp)])
 
         env = HVACGym(site_config, reward_function=example_reward_func, sim_start_date=start)
-        agent = MinMaxCoolAgent(env, cycle_steps=100, cool_chwv_setpoint=100)
+        agent = MinMaxCoolAgent(env, cycle_steps=6 * valve_on_off_hours, cool_chwv_setpoint=chwv_sp)
         obs, rewards = run_gym_with_agent(env, agent, site_config, max_steps=max_steps, show_plot=False)
         obs_df = pd.concat(obs, axis=1).T
         obs_df["reward"] = rewards

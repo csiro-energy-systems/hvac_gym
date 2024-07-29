@@ -170,16 +170,17 @@ class HVACGym(Env[DataFrame, DataFrame]):
         # plot the simulation results
         title = f"Simulation results for {self.site_config.site}"
         targets = [str(m.target) for m in self.site_config.ahu_models]
-        targets_and_inputs = [c for c in list(set(targets + [str(i) for i in inputs_no_lags])) if c in sim_df.columns]
+        targets_and_inputs = [c for c in list(pd.unique(targets + [str(i) for i in inputs_no_lags])) if c in sim_df.columns]
 
-        p_sim = sim_df[targets_and_inputs].query(f"'{self.sim_start_date}'<index and index<'{time}'").sort_index()
-        for col in p_sim.columns:
-            fig.add_trace(go.Scatter(x=p_sim.index, y=p_sim[col], name=col, mode="lines", opacity=0.8), row=1, col=1)
-
-        # also plot the actuals for comparison
+        # plot the actuals for comparison
         p_actuals = self.actuals_df.query(f"'{self.sim_start_date}'<index and index<'{time}'").sort_index()
         for col in p_actuals.columns:
-            fig.add_trace(go.Scatter(x=p_actuals.index, y=p_actuals[col], name=col, mode="lines", opacity=0.8), row=2, col=1)
+            fig.add_trace(go.Scatter(x=p_actuals.index, y=p_actuals[col], name=col, mode="lines", opacity=0.8), row=1, col=1)
+
+        # plot simulated data
+        p_sim = sim_df[targets_and_inputs].query(f"'{self.sim_start_date}'<index and index<'{time}'").sort_index()
+        for col in p_sim.columns:
+            fig.add_trace(go.Scatter(x=p_sim.index, y=p_sim[col], name=col, mode="lines", opacity=0.8), row=2, col=1)
 
         # separate legends for each subplot (see https://community.plotly.com/t/plotly-subplots-with-individual-legends/1754/25)
         for i, yaxis in enumerate(fig.select_yaxes(), 1):

@@ -76,7 +76,7 @@ zone_temp_model = HVACModelConf(
         ahu_chw_valve_sp,
         ahu_hw_valve_sp,
         ahu_sa_fan_speed,
-        oa_temp,
+        # oa_temp,
         ahu_oa_damper,
     ],
     derived_inputs=[ambient_zone_temp],  # predicted by the ambient_zone_temp_model above
