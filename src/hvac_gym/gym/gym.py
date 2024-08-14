@@ -268,12 +268,12 @@ def run_gym_with_agent(
         except KeyboardInterrupt:
             raise
 
-    logger.info(f"Ended after {step} steps.")
+    logger.info(f"Ended after {step+1} steps.")
 
     """ Always save the final plot to static html for reference """
     final_figs = env.render()
     title = f"Simulation results for {site_config.site}"
-    figs_to_html(final_figs, f"output/{title}", show=True)
+    figs_to_html(final_figs, f"output/{title}", show=show_plot)
 
     env.close()
     return observations, rewards
