@@ -1,3 +1,4 @@
+# The Software is copyright (c) CSIRO ABN 41 687 119 230
 from pathlib import Path
 
 from dch.utils.init_utils import cd_project_root

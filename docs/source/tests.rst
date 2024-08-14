@@ -20,6 +20,14 @@ tests.test\_gym module
    :undoc-members:
    :show-inheritance:
 
+tests.test\_train\_site module
+------------------------------
+
+.. automodule:: tests.test_train_site
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Module contents
 ---------------
 

@@ -1,3 +1,4 @@
+# The Software is copyright (c) CSIRO ABN 41 687 119 230
 import pickle
 from datetime import datetime, timedelta
 from typing import Any, Callable, SupportsFloat
@@ -17,6 +18,7 @@ from tqdm import tqdm
 
 from hvac_gym.gym.hvac_agents import HVACAgent
 from hvac_gym.sites.model_config import HVACModelConf, HVACSiteConf
+from hvac_gym.utils.data_utils import unique
 from hvac_gym.vis.vis_tools import figs_to_html
 
 pd.set_option("display.max_rows", 15, "display.max_columns", 20, "display.width", 300, "display.precision", 3)
@@ -58,7 +60,7 @@ class HVACGym(Env[DataFrame, DataFrame]):
         self.actuals_df = self.sim_df.copy()
 
         inputs = [model_conf.inputs for model_conf in site_config.ahu_models]
-        self.all_inputs = list(pd.unique([item for sublist in inputs for item in sublist]))
+        self.all_inputs = list(unique([item for sublist in inputs for item in sublist]))
 
         self.setpoints = site_config.setpoints
 
@@ -163,14 +165,14 @@ class HVACGym(Env[DataFrame, DataFrame]):
         sim_df = self.sim_df
         idx = self.index
         time = sim_df.index[idx]
-        inputs_no_lags = pd.unique(self.all_inputs + self.setpoints)
+        inputs_no_lags = unique(self.all_inputs + self.setpoints)
 
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.1, subplot_titles=("Simulated Data", "Actual Data"))
 
         # plot the simulation results
         title = f"Simulation results for {self.site_config.site}"
         targets = [str(m.target) for m in self.site_config.ahu_models]
-        targets_and_inputs = [c for c in list(pd.unique(targets + [str(i) for i in inputs_no_lags])) if c in sim_df.columns]
+        targets_and_inputs = [c for c in list(unique(targets + [str(i) for i in inputs_no_lags])) if c in sim_df.columns]
 
         # plot the actuals for comparison
         p_actuals = self.actuals_df.query(f"'{self.sim_start_date}'<index and index<'{time}'").sort_index()

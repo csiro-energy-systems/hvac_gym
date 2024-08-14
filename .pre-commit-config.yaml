@@ -3,6 +3,21 @@
 # Run with `poetry run pre-commit run --all-files`
 repos:
 
+  - repo: https://github.com/Lucas-C/pre-commit-hooks
+    rev: v1.5.5
+    hooks:
+      - id: forbid-crlf
+      - id: remove-crlf
+      - id: forbid-tabs
+      - id: remove-tabs
+      - id: insert-license
+        files: \.py$
+        args:
+          - --license-filepath
+          - COPYRIGHT.txt
+          - --use-current-year
+          - --no-extra-eol                # see below
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
     rev: v0.3.4
@@ -60,8 +75,6 @@ repos:
       - id: check-shebang-scripts-are-executable
       - id: name-tests-test
         args: [ '--pytest-test-first' ]
-  #      - id: no-commit-to-branch # breaks first commit if enabled, turn on afterwards
-  #        args: [ '--branch', 'master', '--branch', 'main' ]
 
   # Checks for bad licenses in dependencies
 #  - repo: https://github.com/dhatim/python-license-check

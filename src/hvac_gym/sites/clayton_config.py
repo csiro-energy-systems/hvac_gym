@@ -1,3 +1,4 @@
+# The Software is copyright (c) CSIRO ABN 41 687 119 230
 from dch.dch_interface import DCHBuilding
 from dch.paths.sem_paths import (
     ahu_chw_valve_sp,

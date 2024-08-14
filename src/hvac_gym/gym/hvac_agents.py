@@ -1,3 +1,4 @@
+# The Software is copyright (c) CSIRO ABN 41 687 119 230
 from abc import ABC, abstractmethod
 
 from dch.paths.sem_paths import (

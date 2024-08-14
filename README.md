@@ -1,7 +1,36 @@
 # hvac_gym
 
-Automated modelling of building HVAC and creation of reinforcement learning gym
-environments
+HVAC Gym is a data-driven modelling and reinforcement learning environment for building HVAC systems.
+
+It includes methods of creating a data-driven model of whole building HVAC operation, trained on real data from building
+management systems and electrical metering. These models are then packaged into a 'Gym' environment, which can be used
+to train and test control systems (such as Reinforcement Learning agents or Model Predictive Control methods) to control
+the HVAC system model.
+
+The ultimate goal is to allow quick and repeatable automated building modelling on new buildings, allowing novel
+controllers to be trained/configured before deploying them to control real buildings.
+
+The model training is designed to be sourced from the CSIRO [Data Clearing House (DCH)](http://dataclearinghouse.org),
+with points discovered via [Brick Schema](https://brickschema.org) building models, or for users to provide their own
+data in the correct tabular format (coming soon). A set of sample building data and models are provided in the current
+release.
+
+# Usage
+
+## Installation
+
+```shell
+git clone git@github.com:csiro-energy-systems/hvac_gym.git
+cd hvac_gym
+poetry env use path/to/python>=3.11 # replace with your python executable's path
+poetry install
+poetry run poe clean # clean any old cache files, outputs etc
+unzip data/sample-models.zip # extract sample models and data into output/
+poetry run poe example  # run simple example agent against gym
+
+```
+
+# Developing
 
 ## Authentication
 
@@ -22,7 +51,6 @@ echo DCH_API_KEY=XXXXXXX >> .env
 You'll also need to request access to the CSIRO buildings in Data Clearing House (DCH). Talk to Matt Amos or Akram
 Hameed for access.
 
-## Quick start:
 
 Check the [Authentication](#Authentication) section above, then run the following
 commands to install the packages and run the gym:
@@ -167,3 +195,8 @@ git tag -a 0.0.2a -m "your tag description here"; git push --tags
 ## Installation Instructions
 
 For detailed installation instructions see the template readme [here](docs/README.md)
+
+## Support / Contributions
+
+Github issue reports and pull requests are welcome. The authors will endeavour to respond in a timely manner, but cannot
+guarantee this.

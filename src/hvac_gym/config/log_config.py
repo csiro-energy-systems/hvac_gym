@@ -1,6 +1,5 @@
-"""
-This is a config file (written in python) used for runtime configuration.
-"""
+# The Software is copyright (c) CSIRO ABN 41 687 119 230
+"""This is a config file (written in python) used for runtime configuration."""
 
 # see https://loguru.readthedocs.io/en/stable/api/type_hints.html#module-autodoc_stub_file.loguru
 from __future__ import (
@@ -39,7 +38,6 @@ def get_logger(log_name: str = default_log_name, log_dir: str = ".") -> loguru.L
     Returns:
         Logger: A configured loguru logger.
     """
-
     # set global log level via env var.  Set to INFO if not already set.
     if os.getenv("LOGURU_LEVEL") is None:
         os.environ["LOGURU_LEVEL"] = "INFO"

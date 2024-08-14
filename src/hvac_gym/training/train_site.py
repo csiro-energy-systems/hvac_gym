@@ -1,3 +1,4 @@
+# The Software is copyright (c) CSIRO ABN 41 687 119 230
 import pickle
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -531,7 +532,7 @@ def train_site_model(
         features = dict(zip(np.round(model.coef_, 4), model.feature_names_in_))
         features = dict(sorted(features.items(), reverse=True))
         coeff_str = [f"{k}: {v}" for k, v in features.items()]
-        logger.info(f"Model coefficients: \n{'\n'.join(coeff_str)}")
+        logger.info("Model coefficients: \n" + "\n".join(coeff_str))
 
     if draw_plots:
         # add predictions to the original df
@@ -565,13 +566,9 @@ def train_site_model(
 
 
 if __name__ == "__main__":
-    # end_date = datetime.now()
-    # start_date = end_date - timedelta(days=200)
-
     # fixed dates will reuse data caching
     start_date = datetime(2023, 10, 7)
-    end_date = datetime(2024, 7, 17)
+    end_date = datetime(2024, 8, 14)
 
     site = TrainSite()
     site.run(newcastle_config.model_conf, start_date, end_date)
-    # site.run(clayton_config.model_conf, start_date, end_date)

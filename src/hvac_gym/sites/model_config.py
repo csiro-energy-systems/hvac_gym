@@ -1,3 +1,4 @@
+# The Software is copyright (c) CSIRO ABN 41 687 119 230
 # Created by wes148 at 1/07/2022
 from pathlib import Path
 from typing import Any, Self
