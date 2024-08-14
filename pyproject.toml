@@ -40,7 +40,6 @@ dch = ["dch-interface"]
 [tool.poetry.group.dev.dependencies]
 pytest = "^6.2.3"
 Sphinx = "^7.3.7"
-sphinx-rtd-theme = "^1.0.0"
 myst-parser = "^3.0.1"
 coverage = "^5.5"
 pip-licenses = "^3.5.2"
@@ -49,7 +48,7 @@ pre-commit = "^3.8.0"
 pyproject-flake8 = "^0.0.1-alpha.4"
 pytest-cov = "^3.0.0"
 poethepoet = "^0.20.0"
-mypy = "^1.6.0"
+mypy = "^1.11.1"
 ruff = "^0.1.0"
 black = "^23.9.1"
 nbmake = "^1.4.6"
@@ -58,6 +57,7 @@ liccheck = {git = "https://github.com/dhatim/python-license-check"}
 scalene = "^1.5.40"
 flameprof = "^0.4"
 snakeviz = "^2.2.0"
+pydata-sphinx-theme = ">=0.15.4"
 
 [[tool.poetry.source]]
 name = "PyPI"

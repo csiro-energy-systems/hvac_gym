@@ -77,8 +77,8 @@ class TestGym:
         obs_df = pd.concat(obs, axis=1).T
         obs_df["reward"] = rewards
 
-        logger.info(f"Observations: {obs_df}")
-        logger.info(f"Total reward was {sum(rewards):.1f}")
+        logger.info(f"Observations: \n{obs_df}")
+        logger.info(f"Total reward was {sum(rewards):.1f}")  # type: ignore
 
 
 if __name__ == "__main__":

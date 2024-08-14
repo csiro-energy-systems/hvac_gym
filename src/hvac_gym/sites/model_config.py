@@ -234,5 +234,5 @@ def save_config(conf: HVACSiteConf, path: Path) -> None:
 def load_config(path: Path) -> HVACSiteConf:
     """Load the configuration from a JSON file"""
     with open(path) as f:
-        result = HVACSiteConf.model_validate_json(f.read())
-    return result  # type: ignore
+        result: HVACSiteConf = HVACSiteConf.model_validate_json(f.read())
+    return result

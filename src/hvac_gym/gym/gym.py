@@ -7,7 +7,6 @@ from typing import Any, Callable, SupportsFloat
 import pandas as pd
 import plotly.graph_objects as go
 from gymnasium import Env
-from gymnasium.core import ObsType
 from gymnasium.spaces import Box
 from loguru import logger
 from overrides import overrides
@@ -37,6 +36,7 @@ class HVACGym(Env[DataFrame, DataFrame]):
         function.  Inputs are the observations from the environment, and the output is a single float reward value.
         :param sim_start_date: The start date for the simulation, or None to just start from the beginning of the dataset
         """
+        self.title: str = "HVAC Gym"
         self.site_config = site_config
         self.reward_function = reward_function
         setpoints = site_config.setpoints
@@ -81,7 +81,7 @@ class HVACGym(Env[DataFrame, DataFrame]):
         *,
         seed: int | None = None,
         options: dict[str, Any] | None = None,
-    ) -> tuple[ObsType, dict[str, Any]]:
+    ) -> tuple[Any, dict[str, Any]]:
         """Resets the environment to its initial state.
 
         Returns:
@@ -98,7 +98,7 @@ class HVACGym(Env[DataFrame, DataFrame]):
         return self.state, {}
 
     @overrides
-    def step(self, action: DataFrame) -> tuple[ObsType, SupportsFloat, bool, dict[Any, Any]]:
+    def step(self, action: DataFrame) -> tuple[Any, SupportsFloat, bool, bool, dict[str, Any]]:
         """Takes a step in the environment with the given action.
         Returns:
             observation (ObsType): An element of the environment's :attr:`observation_space` as the next observation due to the agent actions.
@@ -107,6 +107,10 @@ class HVACGym(Env[DataFrame, DataFrame]):
             terminated (bool): Whether the agent reaches the terminal state (as defined under the MDP of the task)
                 which can be positive or negative. An example is reaching the goal state or moving into the lava from
                 the Sutton and Barton, Gridworld. If true, the user needs to call :meth:`reset`.
+            truncated (bool): Whether the truncation condition outside the scope of the MDP is satisfied.
+                Typically, this is a timelimit, but could also be used to indicate an agent physically going out of bounds.
+                Can be used to end the episode prematurely before a terminal state is reached.
+                If true, the user needs to call :meth:`reset`.
             info (dict): Contains auxiliary diagnostic information (helpful for debugging, learning, and logging).
                 This might, for instance, contain: metrics that describe the agent's performance state, variables that are
                 hidden from observations, or individual reward terms that are combined to produce the total reward.
@@ -157,8 +161,9 @@ class HVACGym(Env[DataFrame, DataFrame]):
         obs = self.state
         reward = self.reward_function(self.state)
         terminated: bool = self.index >= len(sim_df) - 1
-        info: dict[Any, Any] = {}
-        return obs, reward, terminated, info
+        info: dict[str, Any] = {}
+        truncated = False
+        return obs, reward, terminated, truncated, info
 
     @overrides
     def render(self, mode: str = "human") -> list[Figure]:
@@ -220,8 +225,8 @@ class HVACGym(Env[DataFrame, DataFrame]):
 
 
 def run_gym_with_agent(
-    env: Env[DataFrame, DataFrame], agent: HVACAgent, site_config: HVACSiteConf, max_steps: int | None = None, show_plot: bool = False
-) -> tuple[list[ObsType], list[float]]:
+    env: HVACGym, agent: HVACAgent, site_config: HVACSiteConf, max_steps: int | None = None, show_plot: bool = False
+) -> tuple[list[Any], list[SupportsFloat]]:
     """Convenience method that runs a simulation of the gym environment with the specified agent
     :param env: The gym environment to simulate
     :param agent: The HVACAgent insstance to use in the simulation
@@ -244,7 +249,7 @@ def run_gym_with_agent(
             env.title = agent.name
             t0 = datetime.now()
             action = agent.act(last_observation, step)
-            observation, reward, done, infos = env.step(action)
+            observation, reward, done, trunc, infos = env.step(action)
 
             observations.append(observation)
             rewards.append(reward)

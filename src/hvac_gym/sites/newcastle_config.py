@@ -105,14 +105,12 @@ ahu_chws_elec_power_model = HVACModelConf(
 model_conf = HVACSiteConf(
     site=DCHBuilding("csiro", "newcastle", "Newcastle", tz="Australia/Sydney"),
     plot_data=False,
-    sim_start_date="2023-10-01",  # Note: Chiller replaced in Sept 2023
     chiller_cop=2.0,
     resample_interval_mins=10,
     use_saved_models=False,
     refit_saved_models=False,
     save_refitted_models=True,
     tpot_max_time_mins=0,
-    skopt_n_hyperparam_runs=0,
     out_dir="output",
     setpoints=[
         ahu_chw_valve_sp,

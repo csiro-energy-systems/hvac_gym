@@ -11,6 +11,7 @@ Subpackages
    hvac_gym.gym
    hvac_gym.sites
    hvac_gym.training
+   hvac_gym.utils
    hvac_gym.vis
 
 Module contents
