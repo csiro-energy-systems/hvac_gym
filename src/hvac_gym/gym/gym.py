@@ -1,5 +1,5 @@
 # The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2024.
-# The Software is copyright (c) CSIRO ABN 41 687 119 230
+
 import pickle
 from datetime import datetime, timedelta
 from typing import Any, Callable, SupportsFloat

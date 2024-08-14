@@ -1,5 +1,5 @@
 # The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2024.
-# The Software is copyright (c) CSIRO ABN 41 687 119 230
+
 # Configuration file for the Sphinx documentation builder.
 #
 # This file only contains a selection of the most common options. For a full
