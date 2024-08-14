@@ -30,9 +30,7 @@ pandas = "^2.2.2"
 overrides = "^7.7.0"
 pendulum = "^3.0.0"
 
-dch-interface = {path = "../dch-interface-py", develop = true}
-#dch-interface = { git = "git@github.com:csiro-energy-systems/dch-interface-py.git", rev = "0.1.13" }
-#dch-interface = {version = "^0.1.13", optional = true}
+dch-interface = {version=">=0.1.14", optional = true}
 
 [tool.poetry.extras]
 # Optional DCH dependencies - only needed to retrain models from raw data via the Data Clearing House (DCH) platform.
