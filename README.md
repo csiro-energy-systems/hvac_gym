@@ -45,8 +45,8 @@ poetry run poe example  # run simple example agent against gym
 
 # Developing
 
-:warning:  Note: Full development of this library currently requires some access to various software infrastructure, so
-is probably only possible for CSIRO staff right now. Some of the links and authentication below won't work for the
+:warning: Note: Full development of this library currently requires some access to various software infrastructure, so
+is only possible for CSIRO staff right now. Some of the links and authentication below won't work for the
 general public. We hope to improve this in later releases.
 
 ## Authentication
@@ -81,8 +81,8 @@ poetry config repositories.csiroenergy https://pkgs.dev.azure.com/csiro-energy/c
 poetry config http-basic.csiroenergy IDENT TOKEN # Note: replace IDENT and TOKEN with your Azure credentials (see above)
 
 # Install packages
-poetry env use path/to/python>=3.9.exe # replace with your python executable's path
-poetry install
+poetry env use path/to/python>=3.11.exe # replace with your python executable's path
+poetry install --all-extras
 
 # Run poe targets for cleaning, training, and running the gym.  See [tool.poe.tasks] section in pyproject.toml for full commands.
 poetry run poe init # (re)set up the environment after a clone or pull

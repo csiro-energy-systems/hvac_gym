@@ -30,7 +30,7 @@ pandas = "^2.2.2"
 overrides = "^7.7.0"
 pendulum = "^3.0.0"
 
-dch-interface = {version=">=0.1.14", optional = true}
+dch-interface = {path="lib/dch_interface-0.1.14-py3-none-any.whl"}
 
 [tool.poetry.extras]
 # Optional DCH dependencies - only needed to retrain models from raw data via the Data Clearing House (DCH) platform.
@@ -59,11 +59,9 @@ scalene = "^1.5.40"
 flameprof = "^0.4"
 snakeviz = "^2.2.0"
 
-
 [[tool.poetry.source]]
 name = "PyPI"
 priority = "primary"
-
 
 [[tool.poetry.source]]
 name = "csiroenergy"
