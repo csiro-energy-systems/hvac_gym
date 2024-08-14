@@ -32,16 +32,18 @@ git clone git@github.com:csiro-energy-systems/hvac_gym.git
 cd hvac_gym
 poetry env use path/to/python>=3.11 # replace with your python executable's path
 poetry install
-poetry run poe clean # clean any old cache files, outputs etc
+poetry run poe clean # clean any old cache files etc
+poetry run poe unit_tests # optional: run unit tests
 
 # Get test data from LFS (large file system)
 git lfs install # windows
-apt-get install git-lfs # linux
+apt install git-lfs # linux
 git lfs pull # pull data for current branch
-unzip data/sample-models.zip # extract sample models and data into output/
 
+unzip data/sample-models.zip # extract sample models and data into output/
 poetry run poe example  # run simple example agent against gym
 ```
+If you'd like to implement your own control agent, see [hvac_agents.py](src/hvac_gym/gym/hvac_agents.py) and [test_gym.py](src/tests/test_gym.py) for simple examples of an agent and the example gym runner respectively.
 
 # Developing
 

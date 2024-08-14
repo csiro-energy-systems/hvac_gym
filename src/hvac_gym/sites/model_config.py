@@ -1,3 +1,4 @@
+# The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2024.
 # The Software is copyright (c) CSIRO ABN 41 687 119 230
 # Created by wes148 at 1/07/2022
 from pathlib import Path
@@ -51,7 +52,7 @@ class HVACModelConf(BaseModel):
     filters: list[PathFilter] = []
 
     # data frame for this model.  Added during training.
-    dataframe: DataFrame = None
+    dataframe: DataFrame | None = None
 
     # metadata for data frame.  Added during training.
     df_attrs: dict[str, Any] = {}
