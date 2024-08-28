@@ -31,6 +31,8 @@ overrides = "^7.7.0"
 pendulum = "^3.0.0"
 
 dch-interface = {path="lib/dch_interface-0.1.14-py3-none-any.whl"}
+pythermalcomfort = "^2.10.0"
+simple-pid = "^2.0.1"
 
 [tool.poetry.extras]
 # Optional DCH dependencies - only needed to retrain models from raw data via the Data Clearing House (DCH) platform.
@@ -58,6 +60,7 @@ scalene = "^1.5.40"
 flameprof = "^0.4"
 snakeviz = "^2.2.0"
 pydata-sphinx-theme = ">=0.15.4"
+types-python-dateutil = "^2.9.0.20240821"
 
 [[tool.poetry.source]]
 name = "PyPI"
@@ -247,7 +250,7 @@ uuid = 1.30
 [tool.pytest.ini_options]
 filterwarnings = ["ignore::DeprecationWarning"]
 markers = ["integration", "manual"]
-addopts = "--verbose"
+addopts = "--verbose --capture=sys"
 # default pytest args for coverage report to console+html (cov-report), reporting long-running tests (durations-min), native stacktraces (tb=native), and jupyer notebook running (nbmake)
 #addopts = '-s --cov-report term-missing --durations=0 --durations-min=5.0 --tb=native --timeout=300 --nbmake --nbmake-timeout=5000 src/'
 

@@ -32,7 +32,7 @@ repos:
     rev: v1.11.1
     hooks:
       - id: mypy
-        additional_dependencies: [ "mypy_extensions"] # run mypy --install-types to discover missing types to add here
+        additional_dependencies: [ "mypy_extensions", "types-python-dateutil" ] # run mypy --install-types to discover missing types to add here
 
   # Strip output from all jupyter notebooks, except those stored in the docs/ directory.
   # We consider everything except documentation to be source code, and source notebooks should not contain outputs.

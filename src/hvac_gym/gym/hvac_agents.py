@@ -51,9 +51,9 @@ class MinMaxCoolAgent(HVACAgent):
         """Returns the action for the given observation and step."""
         if step % self.cycle_steps < self.cycle_steps / 2:
             # max cooling
-            self.df_schema[str(ahu_chw_valve_sp)] = self.cool_chwv_setpoint
+            self.df_schema[str(ahu_chw_valve_sp)] = 0
             return self.df_schema
         else:
             # no cooling
-            self.df_schema[str(ahu_chw_valve_sp)] = 0
+            self.df_schema[str(ahu_chw_valve_sp)] = self.cool_chwv_setpoint
             return self.df_schema

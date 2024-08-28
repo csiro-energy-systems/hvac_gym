@@ -173,7 +173,7 @@ class HVACGym(Env[DataFrame, DataFrame]):
         time = sim_df.index[idx]
         inputs_no_lags = unique(self.all_inputs + self.setpoints)
 
-        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.1, subplot_titles=("Simulated Data", "Actual Data"))
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.1, subplot_titles=("Actual Data", "Simulated Data"))
 
         # plot the simulation results
         title = f"Simulation results for {self.site_config.site}"
@@ -236,7 +236,7 @@ def run_gym_with_agent(
     :return: A tuple of the observations and rewards from the simulation
     """
     env.reset()
-    last_observation = None
+    last_observation = env.sim_df.loc[env.sim_df.index[0]]
 
     if max_steps is None:
         max_steps = len(env.sim_df)
