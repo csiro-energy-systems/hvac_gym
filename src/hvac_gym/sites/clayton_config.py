@@ -1,16 +1,23 @@
-from hvac_gym.sites.model_config import HVACModelConf, HVACSiteConf, PathFilter
 from typing import Literal
 
 from dch.dch_interface import DCHBuilding
 from dch.paths.dch_paths import SemPath
-from dch.paths.sem_paths import ahu_chw_valve_sp, ahu_hw_valve_sp, ahu_oa_damper, ahu_sa_fan_speed, oa_temp, zone_temp, ahu_room_temp, chiller_elec_power
+from dch.paths.sem_paths import (
+    ahu_chw_valve_sp,
+    ahu_hw_valve_sp,
+    ahu_oa_damper,
+    ahu_room_temp,
+    chiller_elec_power,
+    oa_temp,
+)
 from overrides import overrides
 from pandas import DataFrame
 from pydantic import BaseModel
 
+from hvac_gym.sites.model_config import HVACModelConf, HVACSiteConf, PathFilter
 
-# TODO this must use a general path to the gas meter data.
-gas_meter = SemPath(name = "gas_meter", path=["Building_Gas_Meter hasPoint Usage_Sensor[name_path=='GasMt|GM006']"])
+# FIXME this must use a general path to the gas meter data.
+gas_meter = SemPath(name="gas_meter", path=["Building_Gas_Meter hasPoint Usage_Sensor[name_path=='GasMt|GM006']"])
 
 
 """ Newcastle notes:
@@ -43,10 +50,8 @@ class ChillerOffFilter(PathFilter, BaseModel):
         """Removes rows where the boiler isn't consuming significant power"""
         if chiller_elec_power in hvac_model_config.inputs:
             power_col = chiller_elec_power.name
-            operating_power_threshold = filter_df.between_time(
-                "01:00", "02:00")[power_col].quantile(0.9) * 1.2
-            not_operating_df = filter_df[filter_df[power_col]
-                                         < operating_power_threshold]
+            operating_power_threshold = filter_df.between_time("01:00", "02:00")[power_col].quantile(0.9) * 1.2
+            not_operating_df = filter_df[filter_df[power_col] < operating_power_threshold]
             not_operating_df = not_operating_df.drop(columns=[power_col])
             return not_operating_df
         else:
@@ -118,8 +123,7 @@ ahu_hws_power_model = HVACModelConf(
 )
 
 model_conf = HVACSiteConf(
-    site=DCHBuilding("csiro", "clayton", "Building307",
-                     tz="Australia/Melbourne"),
+    site=DCHBuilding("csiro", "clayton", "Building307", tz="Australia/Melbourne"),
     plot_data=False,
     sim_start_date="2023-01-01",
     chiller_cop=2.0,
@@ -138,12 +142,7 @@ model_conf = HVACSiteConf(
     ],
     # Warning: order is important here.  Need to specify shorter-horizon models first so that their predictions are used as inputs to
     # longer-horizon models.
-    ahu_models=[
-        ambient_zone_temp_model,
-        zone_temp_model,
-        ahu_chws_elec_power_model,
-        ahu_hws_power_model
-    ],
+    ahu_models=[ambient_zone_temp_model, zone_temp_model, ahu_chws_elec_power_model, ahu_hws_power_model],
 )
 
 # power_models = {
