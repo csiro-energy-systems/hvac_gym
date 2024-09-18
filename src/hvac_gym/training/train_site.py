@@ -1,6 +1,13 @@
 import pickle
+import dill
 from datetime import datetime, timedelta
 from pathlib import Path
+import warnings
+
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import os
 
 import math
 from scipy.stats import zscore
@@ -22,11 +29,14 @@ from pydantic import BaseModel, ConfigDict
 from sklearn.base import RegressorMixin
 from sklearn.linear_model import ElasticNetCV
 from sklearn.linear_model._base import LinearModel
-from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.model_selection import TimeSeriesSplit, cross_val_score
+from skelm import ELMRegressor
+from sklearn.model_selection import cross_val_score
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.pipeline import Pipeline
 from sklearn.metrics import r2_score, root_mean_squared_error
 from tqdm import tqdm
 import optuna
+from optuna import Trial
 
 from hvac_gym.config.log_config import get_logger
 from hvac_gym.sites import clayton_config
@@ -108,41 +118,43 @@ class TrainSite:
             "input_streams": input_streams,
         }
 
-    def transformation(self, column):
-        """
-        Transforms cyclic time variables (e.g., hours, days) into sine and cosine components.
+    def transform_data(self, df: DataFrame) -> DataFrame:
+        """Apply cyclic transformations to the dataframe and return it."""
+        for period, cols in [
+            ("month", "Month"),
+            ("hour", "Hour"),
+            ("weekday", "Weekday"),
+        ]:
+            sin_col, cos_col = self.cyclic_transform(df.index.to_series().dt.__getattribute__(period))
+            df[f"Sine Transformed {cols} (n/a)"] = sin_col
+            df[f"Cosine Transformed {cols} (n/a)"] = cos_col
 
-        :param column: a pandas Series representing a cyclic time variable.
-        :return: two pandas Series containing the sine and cosine transformations of the input column.
-        """
+        return df
 
+    def cyclic_transform(self, column: pd.Series) -> tuple[pd.Series, pd.Series]:
+        """Convert cyclic features using sine and cosine transformations."""
         column = column + 1
         max_value = column.max()
-        sin_values = [
-            math.sin((2 * np.pi * x) / (max_value + 0.00001)) for x in list(column)
-        ]
-        cos_values = [
-            math.cos((2 * np.pi * x) / (max_value + 0.00001)) for x in list(column)
-        ]
-
+        sin_values = np.sin(2 * np.pi * column / (max_value + 0.00001))
+        cos_values = np.cos(2 * np.pi * column / (max_value + 0.00001))
         return sin_values, cos_values
-
-    def remove_outliers(self, df, z_threshold):
+    
+    def m3_to_kw(self, df, cv, efficiency):
         """
-        Removes outliers from a dataframe based on a z-score threshold.
-
-        :param df: DataFrame from which to remove outliers.
-        :param z_threshold: z-score threshold for identifying outliers.
-        :return: DataFrame with outliers removed.
+        Convert gas usage from m³ to kW.
+        
+        :param df (DataFrame): data.
+        :param sample_rate (float): sample rate in seconds.
+        :param cv (float): calorific value in kWh/m³.
+        :param efficiency (float): efficiency of the boiler.
+        :return df (DataFrame): dataframe with gas meter column converted to power in kW.
         """
-        df_filtered = df.copy()
-        for col in df_filtered.columns:
-            df_filtered['z_score'] = np.abs(
-                zscore(df_filtered[col].dropna(axis=0)))
-            df_filtered[col] = df_filtered[df_filtered['z_score']
-                                           < z_threshold][col]
-            df_filtered.drop('z_score', axis=1, inplace=True)
-        return df_filtered
+        gas_usage = df.iloc[:,0]
+        time_hours = (df.attrs['sample_rate_mins']) / 60  
+        energy_kwh = gas_usage * cv * efficiency  
+        power_kw = energy_kwh / time_hours
+        df.iloc[:,0] = power_kw
+        return df
 
     def preprocess_data(
         self,
@@ -156,12 +168,14 @@ class TrainSite:
         """
         target = data_set.target
         inputs = data_set.inputs
-
+        
         # concat input all streams into a dataframe
         building_input_streams = pd.concat([i.streams for i in inputs])
         building_cols = list(flatten(building_input_streams["column_name"]))
         building_df, sample_rate = resample_and_join_streams(
             [i.data[[c for c in building_cols if c in i.data.columns]] for i in inputs])
+        
+        self.sample_rate = sample_rate
 
         # take median of each group of building data types (e.g. there's often several OAT sensors)
         # use SemPath instances for new aggregated column names
@@ -177,23 +191,11 @@ class TrainSite:
             # building_df[f"{stream_type}_total"] = building_df[cols].sum(axis=1, skipna=True)
             building_df = building_df.drop(columns=cols)
 
+
         input_cols = list(building_df.columns)
         target_col = model_conf.target
-
-        # self.remove_outliers(building_df, 3)
-
-        building_df["sin Hour_OD"] = self.transformation(
-            building_df.index.hour)[0]
-        building_df["cos Hour_OD"] = self.transformation(
-            building_df.index.hour)[1]
-        building_df["sin Type_OD"] = self.transformation(
-            building_df.index.weekday)[0]
-        building_df["cos Type_OD"] = self.transformation(
-            building_df.index.weekday)[1]
-        building_df["sin MOY"] = self.transformation(
-            building_df.index.month)[0]
-        building_df["cos MOY"] = self.transformation(
-            building_df.index.month)[1]
+        
+        #building_df = self.transform_data(building_df.copy())
 
         input_cols = list(building_df.columns)
         target_col = model_conf.target
@@ -202,28 +204,17 @@ class TrainSite:
         target_cols = list(target.streams["column_name"])
         target_df = target.data[target_cols]
         target_df = pd.DataFrame(
-            target_df.median(axis=1), columns=[target_col])
+            target_df.median(axis=1), columns=[target_col])    
+        
         building_df = (
             target_df.resample(f"{sample_rate}min").median().join(building_df).interpolate(
-                limit=3, limit_direction="forward", method="linear")
+                limit=6, limit_direction="forward", method="linear")
         )
-
-        # add lagged columns for each input
-        exclude_cols = ['sin Minute_OD', 'cos Minute_OD',
-                        'sin Type_OD', 'cos Type_OD']
-
-        if 'ahu_enable_status' in building_df.columns:
-            building_df["ahu_enable_status"] = building_df["ahu_enable_status"].apply(
-                lambda x: int(x) if pd.notna(x) else x)
-            time_mask = ((building_df.index.time >= pd.to_datetime('18:00').time()) | (
-                building_df.index.time < pd.to_datetime('06:00').time()) & (building_df["ahu_enable_status"] == 0))
-            building_df.loc[time_mask, "ahu_chw_valve_sp"] = building_df.loc[time_mask,
-                                                                             "ahu_chw_valve_sp"].apply(lambda x: 0 if x > 0 else x)
-            if 'ahu_hw_valve_sp' in building_df.columns:
-                building_df.loc[time_mask, "ahu_hw_valve_sp"] = building_df.loc[time_mask,
-                                                                                "ahu_hw_valve_sp"].apply(lambda x: 0 if x > 0 else x)
-
-        # add lagged columns for each input
+            
+        # add lagged columns for each input.  
+        # don't add lag to the temporal features.
+        exclude_cols = [col for col in building_df.columns if "Transformed" in col]
+        
         lagged_cols = []
         for col in input_cols:
             if col in exclude_cols:
@@ -245,12 +236,12 @@ class TrainSite:
         horizon_rows = int(horizon_mins / target.sample_rate)
         input_cols = [c for c in building_df.columns if c != target_col]
         building_df[input_cols] = building_df[input_cols].shift(horizon_rows)
-
+        
         return building_df
 
     def run(self, site_config: HVACSiteConf, start: datetime, end: datetime) -> None:
         """Main entrypoint to acquire data, train models and run gym-like simulation for a site"""
-        models: dict[HVACModelConf, RegressorMixin] = {}
+        models: dict[HVACModelConf, Pipeline] = {}
         model_dfs = []
         predictions: list[Series] = []
         for model_conf in site_config.ahu_models:
@@ -261,9 +252,19 @@ class TrainSite:
             # Gather and preprocess data
             streams = self.check_streams(model_conf, building)
             streams = self.validate_streams(streams)
+                           
             data = get_data(streams, building, start, end)
+            
             building_df = self.preprocess_data(
                 data, site_config, model_conf, streams)
+            
+                        
+            # FIXME it tries to convert gas meter data to power (in kW). Needs to be fixed: gas meter path is not general.
+            # the function itself needs to be more general. 
+            # also conversion constants are just based on assumptions.
+            gas_meter = SemPath(name = "gas_meter", path=["Building_Gas_Meter hasPoint Usage_Sensor[name_path=='GasMt|GM006']"])
+            if gas_meter in building_df.columns:
+               building_df = self.m3_to_kw(building_df.copy(), cv=9, efficiency=0.7)            
 
             model, preds = train_site_model(
                 building_df, site_config.site, model_conf, predictions)
@@ -307,14 +308,14 @@ class TrainSite:
 
                 # set chilled water valve to square wave, cycling every N steps
                 chwv_col = str(ahu_chw_valve_sp.name)
-                _hwv_col = str(ahu_hw_valve_sp.name)
+                hwv_col = str(ahu_hw_valve_sp.name)
                 cycle_steps = 12 * 2
 
                 chwv_sp = 100 if idx % cycle_steps < cycle_steps / 2 else 0
                 sim_df.loc[time, chwv_col] = chwv_sp
 
-                # hwv_sp = 100 if idx % cycle_steps > cycle_steps / 2 else 0
-                # sim_df.loc[time, hwv_col] = hwv_sp
+                hwv_sp = 100 if idx % cycle_steps > cycle_steps / 2 else 0
+                sim_df.loc[time, hwv_col] = hwv_sp
 
                 # TODO set lags here also
 
@@ -379,7 +380,7 @@ class TrainSite:
 
         return streams
 
-    def save_models_and_data(self, models: dict[HVACModelConf, RegressorMixin], model_dfs: list[DataFrame], site_config: HVACSiteConf) -> DataFrame:
+    def save_models_and_data(self, models: dict[HVACModelConf, Pipeline], model_dfs: list[DataFrame], site_config: HVACSiteConf) -> DataFrame:
         """
         Combines dataframes from all models into a single DF that can be used for simulation, and saves it and the models to disk.
         :param models: the trained models
@@ -390,7 +391,7 @@ class TrainSite:
         # save models to disk
         for model_conf, model in models.items():
             with open(f"{site_config.out_dir}/{site_config.site}_{model_conf.output}_model.pkl", "wb") as f:
-                pickle.dump(model, f)
+                dill.dump(model, f)
 
         # combine DFs from all models
         sim_df = pd.concat(model_dfs, axis="columns")
@@ -512,8 +513,61 @@ def get_data(
         data=i["data"], streams=i["streams"], sample_rate=i["sample_rate"]) for i in inputs]
 
     training_set = TrainingSet(target=target_data, inputs=input_data)
+    
 
     return training_set
+
+def elm_optuna_param_search(x_train: pd.DataFrame, y_train: pd.DataFrame, n_trials: int = 500) -> Pipeline:
+    """
+    Performs an optuna search for the best hyperparameters for an ELMRegressor model, trying to maximise cross-validation score on the
+    provided training set.
+    :param x_train: the training set features
+    :param y_train: the training set target
+    :param n_trials: the number of optuna trials to perform
+    :return: the best model (unfitted, with best found params) and the optuna optimization history plot
+    """
+
+    def objective(trial: Trial) -> float:
+        """Optuna search for the ELMRegressor hyperparams"""
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            x, y = x_train, y_train
+            regressor_obj = ELMRegressor(
+                n_neurons=trial.suggest_int("n_neurons", 10, 1000, log=False),
+                ufunc=trial.suggest_categorical("ufunc", ["tanh", "sigm", "relu", "lin"]),
+                alpha=trial.suggest_loguniform("alpha", 1e-7, 1e-1),
+                include_original_features=trial.suggest_categorical("include_original_features", [True, False]),
+                density=trial.suggest_float("density", 1e-3, 1, step=0.1),
+                pairwise_metric=trial.suggest_categorical("pairwise_metric", ["euclidean", "cityblock", "cosine", None]),
+            )
+
+            pipeline = Pipeline([
+                ('scaler', StandardScaler()),
+                ('regressor', regressor_obj)
+            ])
+
+            score = cross_val_score(pipeline, x_train, y_train, n_jobs=-1, cv=3)
+            accuracy = score.mean()
+        return accuracy
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        study = optuna.create_study(direction="maximize")
+        study.optimize(objective, n_trials=n_trials, n_jobs=-1, show_progress_bar=True)
+
+    logger.info("Best trial:")
+    trial = study.best_trial
+
+    logger.info("  Value: ", trial.value)
+    logger.info("  Params: ")
+    for key, value in trial.params.items():
+        logger.info(f"    {key}: {value}")
+
+    model = Pipeline([
+        ('scaler', StandardScaler()),
+        ('regressor', ELMRegressor(**trial.params))
+    ])
+    return model
 
 
 # @memory.cache()
@@ -565,22 +619,28 @@ def train_site_model(
     # linear models
     # model = sklearn.linear_model.LinearRegression()
     model = ElasticNetCV(n_jobs=-1)  # very fast fitting
+    
+    #model = Pipeline([
+    #            ('scaler', MinMaxScaler()),
+    #            ('regressor', ElasticNetCV(n_jobs=-1))
+    #        ])
     # model = sklearn.linear_model.LassoCV(n_jobs=-1)
 
     # nonlinear models
     # model = ELMRegressor(**{'n_neurons': 119,'ufunc': 'sigm','alpha': 0.011,'include_original_features': True,'density': 0.7,
     # 'pairwise_metric': 'euclidean'})
-    # model, fig2 = elm_optuna_param_search(train_x, train_y, n_trials=100)
+    #model = elm_optuna_param_search(train_x, train_y.to_numpy().ravel(), n_trials=500)
     # model = sklearn.ensemble.RandomForestRegressor(n_jobs=-1, verbose=0, n_estimators=30)
     # model = ExtraTreesRegressor(n_jobs=-1, n_estimators=200)
     # model = TPOTRegressor(n_jobs=cpu_count(), max_time_seconds=60 * 30, max_eval_time_seconds=60, early_stop=3, verbose=1)
-
     # fit the model and print metrics
     model.fit(train_x, train_y.to_numpy().ravel())
+    #model["regressor"].feature_names_in_ = list(train_x.columns)
     model.feature_names_in_ = list(train_x.columns)
     test_pred = pd.Series(model.predict(test_x).ravel(), index=test_x.index)
     train_pred = pd.Series(model.predict(train_x).ravel(), index=train_x.index)
-
+    
+    
     # also predict on the unfiltered data, so we can feed it to subsequent models
     # TODO does this cause us to use predictions from the training set?
     unfilt_pred = pd.concat(
@@ -597,7 +657,7 @@ def train_site_model(
     ).sort_index()
     unfilt_pred.name = model_conf.output if model_conf.output else f"{target_cols[0]}"
 
-    # report accuracy
+    # report accuracy    
     r2 = r2_score(test_y, test_pred)
     rmse = root_mean_squared_error(test_y, test_pred)
     logger.info(
@@ -682,9 +742,8 @@ if __name__ == "__main__":
     # start_date = end_date - timedelta(days=200)
 
     # fixed dates will reuse data caching
-    start_date = datetime(2023, 1, 7)
-    end_date = datetime(2024, 4, 24)
+    start_date = datetime(2022, 10, 1)
+    end_date = datetime(2023, 6, 26)
 
     site = TrainSite()
     site.run(clayton_config.model_conf, start_date, end_date)
-    # site.run(clayton_config.model_conf, start_date, end_date)

@@ -17,19 +17,13 @@ from hvac_gym.sites import clayton_config
 cd_project_root()
 Path("output").mkdir(exist_ok=True)
 
-boiler_elec_power = SemPath(
-    name="boiler_elec_power", path=[
-        "Boiler isFedBy Electrical_Meter hasPoint Electrical_Power_Sensor[(unit=='unit:KiloW') & (electricalPhases=='ABC')]",
-        "Boiler isFedBy Electrical_Circuit isFedBy Electrical_Meter hasPoint Electrical_Power_Sensor[(unit=='unit:KiloW') & (electricalPhases=='ABC')]",
-    ],
-)
-
 
 class TestGym:
     @pytest.mark.integration
     def test_gym_step(self) -> None:
         """Tests a single step of teh gym environment"""
         from hvac_gym.sites import clayton_config
+    
 
         site_config = clayton_config.model_conf
         env = HVACGym(site_config, reward_function=lambda x: 0.0)
@@ -63,13 +57,21 @@ class TestGym:
     def test_gym_simulate_long(self) -> None:
         """Tests a long simulation of the gym environment"""
         max_steps = 1000
-        start = parse("2023-11-01", tz="Australia/Sydney")
+        start = parse("2023-06-01", tz="Australia/Sydney")
         site_config = clayton_config.model_conf
 
         def example_reward_func(observations: Series) -> float:
             """Example (but fairly pointless) reward function.
             Replace with your own bespoke reward function calculated from anything in the observations."""
-            return float(observations[str(Boiler_elec_power)] + observations[str(ahu_room_temp)])
+            
+            chiller_elec_power = SemPath(
+                name="chiller_elec_power", path=[
+                    "Chiller isFedBy Electrical_Meter hasPoint Electrical_Power_Sensor[(unit=='unit:KiloW') & (electricalPhases=='ABC')]",
+                    "Chiller isFedBy Electrical_Circuit isFedBy Electrical_Meter hasPoint Electrical_Power_Sensor[(unit=='unit:KiloW') & (electricalPhases=='ABC')]",
+                ],
+            )
+
+            return float(observations[str(chiller_elec_power)] + observations[str(ahu_room_temp)])
 
         env = HVACGym(
             site_config, reward_function=example_reward_func, sim_start_date=start)
