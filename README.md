@@ -1,4 +1,4 @@
-# hvac_gym
+# HVAC Gym
 
 HVAC Gym is a data-driven modelling and reinforcement learning environment for building HVAC systems.
 
@@ -27,14 +27,14 @@ controllers.
 ## Installation
 
 To run this repository, you'll need to
-install [git](https://git-scm.com/downloads), [python](https://www.python.org/downloads/),
-and [poetry](https://python-poetry.org/docs/#installation), >= v1.8 and then run the following commands:
+install [git](https://git-scm.com/downloads), [python](https://www.python.org/downloads/) >= 3.12,
+and [poetry](https://python-poetry.org/docs/#installation) >= v1.8, and then run the following commands:
 
 ```shell
 git clone git@github.com:csiro-energy-systems/hvac_gym.git # To set up SSH keys, see https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh
 git clone https://github.com/csiro-energy-systems/hvac_gym.git # or clone via https
 cd hvac_gym
-poetry env use path/to/python>=3.11 # replace with your python executable's path
+poetry env use path/to/python>=3.12 # replace with your python executable's path
 poetry install
 poetry run poe clean # clean any old cache files etc
 poetry run poe unit_tests # optional: run unit tests
@@ -44,7 +44,8 @@ git lfs install # windows
 apt install git-lfs # linux
 git lfs pull # pull data for current branch
 
-unzip data/sample-models.zip # extract sample models and data into output/
+unzip data/sample-models.zip # or manually extract sample models and data into hvac_gym/output/
+ls output # check that output/ now contains three .pkl files and a .parquet file.
 poetry run poe example  # run simple example agent against gym
 ```
 
@@ -53,7 +54,7 @@ and [test_gym.py](src/tests/test_gym.py) for simple examples of an agent and the
 
 # Gym Environment
 
-The current gym runs models the whole-building behaviour of a 3-storey office building with in Newcastle, Australia.
+The current gym runs models the whole-building behaviour of a 3-storey office building with in NSW, Australia.
 Individual AHU and zone measurements are available for the building, but to simplify the model (for speed and
 troubleshooting purposes), the median of each sensor and setpoint type is taken across all zones, and the HVAC system
 modelled as a single large zone.
@@ -76,22 +77,22 @@ The gym's inputs and outputs are described below.
         - This is an intermediate output, predicting the zone temperature as if no mechanical cooling/heating was
           applied.
 - Actuals:
-  - Actual zone temperature (°C): the real building's median zone temperature, as was measured by physical sensors.
-  - Actual chiller power (kW): the real building's total chiller power, as was measured by electrical power meters.
+    - Actual zone temperature (°C): the real building's median zone temperature, as was measured by physical sensors.
+    - Actual chiller power (kW): the real building's total chiller power, as was measured by electrical power meters.
 - Reward
     - A reward function is passed into the to allow users to customise their agent's reward function. It can be
       calculated from any of the observations and actions.
 
 # Developing
 
-:warning: Note: Full development of this library currently requires some access to various software infrastructure, so
-is only possible for CSIRO staff right now. Some of the links and authentication below won't work for the
-general public. We hope to improve this in later releases.
+:warning: Note: Full development of this library (for training new models etc) currently requires some access to some
+non-public software infrastructure, sois only possible for CSIRO staff right now. Some of the links and authentication
+below won't work for the general public. We hope to improve this in later releases.
 
 ## Authentication
 
 Installing currently requires access to some dependencies hosted on the private `csiroenergy` Azure package repository.
-Please floow steps
+Please follow steps
 in [Azure Package Repo Setup](https://confluence.csiro.au/display/GEES/Poetry+Cheat+Sheet#PoetryCheatSheet-InstallFromandPublishtoourPrivatePyPiindex)
 to obtain and set an API key before proceeding.
 
