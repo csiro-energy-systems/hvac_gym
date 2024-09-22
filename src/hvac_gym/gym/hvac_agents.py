@@ -1,3 +1,5 @@
+# The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2024.
+
 from abc import ABC, abstractmethod
 
 from dch.paths.sem_paths import (
@@ -39,7 +41,7 @@ class MinMaxCoolAgent(HVACAgent):
                 str(ahu_chw_valve_sp): 0,
                 str(ahu_hw_valve_sp): 0,
                 str(ahu_oa_damper): 0,
-                str(ahu_sa_fan_speed): 0,
+                str(ahu_sa_fan_speed): 50,
             },
             index=[0],
         )

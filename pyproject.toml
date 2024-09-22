@@ -21,7 +21,6 @@ scikit-learn = "^1.4.2"
 optuna = "^3.6.1"
 scikit-elm = {git = "https://github.com/akusok/scikit-elm.git"}
 dask = {version = "^2024.4.1", extras = ["array", "dataframe", "distributed"]}
-#tpot2 = "^0.1.5a0"
 py-spy = "^0.3.14"
 pysr = "^0.18.4"
 polars = "^0.20.25"
@@ -29,26 +28,27 @@ gymnasium = "^0.29.1"
 joblib = "^1.4.2"
 pandas = "^2.2.2"
 overrides = "^7.7.0"
-
-#dch-interface = {path = "../dch-interface-py", develop = true}
-#dch-interface = { git = "git@github.com:csiro-energy-systems/dch-interface-py.git", rev = "0.1.13" }
-dch-interface = "0.1.13"
 pendulum = "^3.0.0"
 
+dch-interface = {path="lib/dch_interface-0.1.14-py3-none-any.whl"}
+
+[tool.poetry.extras]
+# Optional DCH dependencies - only needed to retrain models from raw data via the Data Clearing House (DCH) platform.
+# Install with `poetry add hvac_gym --extras dch` or `pip install hvac_gym[dch]`
+dch = ["dch-interface"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^6.2.3"
 Sphinx = "^7.3.7"
-sphinx-rtd-theme = "^1.0.0"
 myst-parser = "^3.0.1"
 coverage = "^5.5"
 pip-licenses = "^3.5.2"
 pylint = "^3.2.3"
-pre-commit = "^2.19.0"
+pre-commit = "^3.8.0"
 pyproject-flake8 = "^0.0.1-alpha.4"
 pytest-cov = "^3.0.0"
 poethepoet = "^0.20.0"
-mypy = "^1.6.0"
+mypy = "^1.11.1"
 ruff = "^0.1.0"
 black = "^23.9.1"
 nbmake = "^1.4.6"
@@ -57,12 +57,11 @@ liccheck = {git = "https://github.com/dhatim/python-license-check"}
 scalene = "^1.5.40"
 flameprof = "^0.4"
 snakeviz = "^2.2.0"
-
+pydata-sphinx-theme = ">=0.15.4"
 
 [[tool.poetry.source]]
 name = "PyPI"
 priority = "primary"
-
 
 [[tool.poetry.source]]
 name = "csiroenergy"
@@ -86,10 +85,8 @@ train = { cmd = "poetry run python src/hvac_gym/training/train_site.py ", help =
 example = { cmd = "poetry run python src/tests/test_gym.py", help = "Run the example script" }
 
 init = { shell = "poetry lock --no-update; poetry install --sync; poetry run pre-commit install", help = "(Re)initialise the project, e.g. install updated dependencies (e.g. after a pull/merge)", interpreter = "posix" }
-run = { cmd = "poetry run python src/hvac_gym/example.py", help = "Run the project" }
 clean = { shell = "rm -rf output/.func_cache .coverage .mypy_cache .pytest_cache dist ./**/__pycache__ docs/build/ dist docs/build docs/source/_static docs/source/wpf.*.rst", help = "Clean up build artifacts", interpreter = "posix" }
 clean_outputs = { shell = "rm -rf output/ results/", help = "Cleans output dirs: output/ & results/", interpreter = "posix" }
-precommit = { cmd = "poetry run pre-commit run", help = "Run pre-commit hooks" }
 lint = { cmd = "poetry run git add .pre-commit-config.yaml & pre-commit run", help = "Run pre-commit hooks" }
 
 unit_tests = { shell = 'poetry run pytest --capture=sys -m "not integration" --cov-report term-missing --cov-report html --cov=src/ --durations=0 --durations-min=5.0 --tb=native --nbmake src/ --nbmake-timeout=5000', help = "Run unit tests", interpreter = "posix" }
@@ -249,6 +246,8 @@ uuid = 1.30
 # see https://docs.pytest.org/en/6.2.x/customize.html and https://docs.pytest.org/en/6.2.x/reference.html#ini-options-ref
 [tool.pytest.ini_options]
 filterwarnings = ["ignore::DeprecationWarning"]
+markers = ["integration", "manual"]
+addopts = "--verbose"
 # default pytest args for coverage report to console+html (cov-report), reporting long-running tests (durations-min), native stacktraces (tb=native), and jupyer notebook running (nbmake)
 #addopts = '-s --cov-report term-missing --durations=0 --durations-min=5.0 --tb=native --timeout=300 --nbmake --nbmake-timeout=5000 src/'
 
