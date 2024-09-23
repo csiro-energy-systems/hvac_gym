@@ -70,6 +70,7 @@ ambient_zone_temp_model = HVACModelConf(
     horizon_mins=0,
     lags=[],
     filters=[ChillerOffFilter()],
+    add_temporal_features=False,
 )
 
 """ Simple model of average building zone temp as a function of hot/chilled water valves, fan speeds and outside air temp and the ambient_zone_temp
@@ -89,6 +90,7 @@ zone_temp_model = HVACModelConf(
     derived_inputs=[ambient_zone_temp],
     horizon_mins=0,
     lags=[],  # list(range(1, 7, 1)),
+    add_temporal_features=False,
     lag_target=False,
 )
 
@@ -104,6 +106,7 @@ ahu_chws_elec_power_model = HVACModelConf(
     derived_inputs=[],
     horizon_mins=10,
     lags=[],  # list(range(1, 7, 1)),
+    add_temporal_features=False,
     lag_target=False,
 )
 
@@ -119,6 +122,8 @@ ahu_hws_power_model = HVACModelConf(
     derived_inputs=[],
     horizon_mins=10,
     lags=[],  # list(range(1, 7, 1)),
+    add_temporal_features=False,
+    convert_m3_kw=True,
     lag_target=False,
 )
 
@@ -127,6 +132,8 @@ model_conf = HVACSiteConf(
     plot_data=False,
     sim_start_date="2023-01-01",
     chiller_cop=2.0,
+    cv=9,
+    boiler_efficiency=0.75,
     resample_interval_mins=10,
     use_saved_models=False,
     refit_saved_models=False,

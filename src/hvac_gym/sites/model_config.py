@@ -46,6 +46,12 @@ class HVACModelConf(BaseModel):
     # lag_target: whether to lag the target column as well as inputs
     lag_target: bool = False
 
+    # adding temporal features to inputs
+    add_temporal_features: bool = False
+
+    # True will convert the gas usage from m3 to kW.
+    convert_m3_kw: bool = False
+
     # filters: list of functions to apply to the dataframe before training the model
     filters: list[PathFilter] = []
 
@@ -96,6 +102,12 @@ class HVACSiteConf(BaseModel):
 
     # Approximate chiller coefficient of performance (Watts_thermal / Watts_electric)
     chiller_cop: float = 2
+
+    # Calorific value of the gas (kWh/m3)
+    cv: float = 10
+
+    # Boiler efficiency (%)
+    boiler_efficiency: float = 0.75
 
     # Override automatic resampling of data to this interval in minutes
     resample_interval_mins: int = 10

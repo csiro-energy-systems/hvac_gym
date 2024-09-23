@@ -1,17 +1,14 @@
-import pickle
-import dill
+import warnings
 from datetime import datetime, timedelta
 from pathlib import Path
-import warnings
 
+import dill
 import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import os
 
-import math
-from scipy.stats import zscore
+matplotlib.use("Agg")
+
 import numpy as np
+import optuna
 import pandas as pd
 import plotly.io as pio
 from dch.dch_interface import DCHBuilding, DCHInterface
@@ -22,21 +19,19 @@ from dch.utils.data_utils import resample_and_join_streams
 from dch.utils.init_utils import cd_project_root
 from dotenv import load_dotenv
 from joblib import Memory
+from optuna import Trial
 from pandas import DataFrame, Series
 from plotly import express as px
 from plotly.graph_objs import Figure
 from pydantic import BaseModel, ConfigDict
+from skelm import ELMRegressor
 from sklearn.base import RegressorMixin
 from sklearn.linear_model import ElasticNetCV
 from sklearn.linear_model._base import LinearModel
-from skelm import ELMRegressor
-from sklearn.model_selection import cross_val_score
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from sklearn.pipeline import Pipeline
 from sklearn.metrics import r2_score, root_mean_squared_error
+from sklearn.model_selection import cross_val_score
+from sklearn.pipeline import Pipeline
 from tqdm import tqdm
-import optuna
-from optuna import Trial
 
 from hvac_gym.config.log_config import get_logger
 from hvac_gym.sites import clayton_config
@@ -53,8 +48,7 @@ draw_plots = False  # enables/disables plotting during training
 show_plots = False  # enables/disables opening plots when draw_plots==True
 
 pd.options.mode.chained_assignment = None
-pd.set_option("display.max_rows", 10, "display.max_columns", 20,
-              "display.width", 200, "display.max_colwidth", 30)
+pd.set_option("display.max_rows", 10, "display.max_columns", 20, "display.width", 200, "display.max_colwidth", 30)
 
 func_cache_dir = Path("output/.func_cache")
 memory = Memory(func_cache_dir, verbose=1)
@@ -102,16 +96,12 @@ class TrainSite:
         target_point = model_conf.target
         input_points = model_conf.inputs
 
-        target_stream = self.dch.find_streams_path(
-            building, target_point, long_format=True)
-        input_streams = {point: self.dch.find_streams_path(
-            building, point, long_format=True) for point in input_points}
+        target_stream = self.dch.find_streams_path(building, target_point, long_format=True)
+        input_streams = {point: self.dch.find_streams_path(building, point, long_format=True) for point in input_points}
 
-        missing_streams = ([point for point, streams in input_streams.items(
-        ) if streams.empty]) + ([target_point] if target_stream.empty else [])
+        missing_streams = ([point for point, streams in input_streams.items() if streams.empty]) + ([target_point] if target_stream.empty else [])
         if len(missing_streams) > 0:
-            logger.error(
-                f"Missing target or input streams for {building}. Missing inputs: {missing_streams}")
+            logger.error(f"Missing target or input streams for {building}. Missing inputs: {missing_streams}")
 
         return {
             "target_streams": {target_point: target_stream},
@@ -138,22 +128,22 @@ class TrainSite:
         sin_values = np.sin(2 * np.pi * column / (max_value + 0.00001))
         cos_values = np.cos(2 * np.pi * column / (max_value + 0.00001))
         return sin_values, cos_values
-    
-    def m3_to_kw(self, df, cv, efficiency):
+
+    def m3_to_kw(self, df: DataFrame, cv: float, efficiency: float) -> DataFrame:
         """
         Convert gas usage from m³ to kW.
-        
+
         :param df (DataFrame): data.
         :param sample_rate (float): sample rate in seconds.
         :param cv (float): calorific value in kWh/m³.
         :param efficiency (float): efficiency of the boiler.
         :return df (DataFrame): dataframe with gas meter column converted to power in kW.
         """
-        gas_usage = df.iloc[:,0]
-        time_hours = (df.attrs['sample_rate_mins']) / 60  
-        energy_kwh = gas_usage * cv * efficiency  
+        gas_usage = df.iloc[:, 0]
+        time_hours = (df.attrs["sample_rate_mins"]) / 60
+        energy_kwh = gas_usage * cv * efficiency
         power_kw = energy_kwh / time_hours
-        df.iloc[:,0] = power_kw
+        df.iloc[:, 0] = power_kw
         return df
 
     def preprocess_data(
@@ -168,34 +158,30 @@ class TrainSite:
         """
         target = data_set.target
         inputs = data_set.inputs
-        
+
         # concat input all streams into a dataframe
         building_input_streams = pd.concat([i.streams for i in inputs])
         building_cols = list(flatten(building_input_streams["column_name"]))
-        building_df, sample_rate = resample_and_join_streams(
-            [i.data[[c for c in building_cols if c in i.data.columns]] for i in inputs])
-        
+        building_df, sample_rate = resample_and_join_streams([i.data[[c for c in building_cols if c in i.data.columns]] for i in inputs])
+
         self.sample_rate = sample_rate
 
         # take median of each group of building data types (e.g. there's often several OAT sensors)
         # use SemPath instances for new aggregated column names
-        building_stream_types = building_input_streams.groupby(
-            "type_path").aggregate({"column_name": lambda x: list(x)})
+        building_stream_types = building_input_streams.groupby("type_path").aggregate({"column_name": lambda x: list(x)})
         for stream_type in building_stream_types.index:
-            cols = [c for c in building_stream_types.loc[stream_type,
-                                                         "column_name"] if c in building_df.columns]
-            sempath = building_input_streams.query(
-                "type_path == @stream_type")["sem_path"].unique()[0]
-            building_df[sempath] = building_df[cols].median(
-                axis=1, skipna=True)
+            cols = [c for c in building_stream_types.loc[stream_type, "column_name"] if c in building_df.columns]
+            sempath = building_input_streams.query("type_path == @stream_type")["sem_path"].unique()[0]
+            building_df[sempath] = building_df[cols].median(axis=1, skipna=True)
             # building_df[f"{stream_type}_total"] = building_df[cols].sum(axis=1, skipna=True)
             building_df = building_df.drop(columns=cols)
 
-
         input_cols = list(building_df.columns)
         target_col = model_conf.target
-        
-        #building_df = self.transform_data(building_df.copy())
+
+        # adding temporal features
+        if model_conf.add_temporal_features:
+            building_df = self.transform_data(building_df.copy())
 
         input_cols = list(building_df.columns)
         target_col = model_conf.target
@@ -203,18 +189,16 @@ class TrainSite:
         # append the median of the target data to the building data
         target_cols = list(target.streams["column_name"])
         target_df = target.data[target_cols]
-        target_df = pd.DataFrame(
-            target_df.median(axis=1), columns=[target_col])    
-        
+        target_df = pd.DataFrame(target_df.median(axis=1), columns=[target_col])
+
         building_df = (
-            target_df.resample(f"{sample_rate}min").median().join(building_df).interpolate(
-                limit=6, limit_direction="forward", method="linear")
+            target_df.resample(f"{sample_rate}min").median().join(building_df).interpolate(limit=6, limit_direction="forward", method="linear")
         )
-            
-        # add lagged columns for each input.  
+
+        # add lagged columns for each input.
         # don't add lag to the temporal features.
         exclude_cols = [col for col in building_df.columns if "Transformed" in col]
-        
+
         lagged_cols = []
         for col in input_cols:
             if col in exclude_cols:
@@ -236,7 +220,7 @@ class TrainSite:
         horizon_rows = int(horizon_mins / target.sample_rate)
         input_cols = [c for c in building_df.columns if c != target_col]
         building_df[input_cols] = building_df[input_cols].shift(horizon_rows)
-        
+
         return building_df
 
     def run(self, site_config: HVACSiteConf, start: datetime, end: datetime) -> None:
@@ -245,29 +229,24 @@ class TrainSite:
         model_dfs = []
         predictions: list[Series] = []
         for model_conf in site_config.ahu_models:
-            logger.info(
-                f"Training model {model_conf.output} model for {site_config.site}")
+            logger.info(f"Training model {model_conf.output} model for {site_config.site}")
             building = site_config.site
 
             # Gather and preprocess data
             streams = self.check_streams(model_conf, building)
             streams = self.validate_streams(streams)
-                           
-            data = get_data(streams, building, start, end)
-            
-            building_df = self.preprocess_data(
-                data, site_config, model_conf, streams)
-            
-                        
-            # FIXME it tries to convert gas meter data to power (in kW). Needs to be fixed: gas meter path is not general.
-            # the function itself needs to be more general. 
-            # also conversion constants are just based on assumptions.
-            gas_meter = SemPath(name = "gas_meter", path=["Building_Gas_Meter hasPoint Usage_Sensor[name_path=='GasMt|GM006']"])
-            if gas_meter in building_df.columns:
-               building_df = self.m3_to_kw(building_df.copy(), cv=9, efficiency=0.7)            
 
-            model, preds = train_site_model(
-                building_df, site_config.site, model_conf, predictions)
+            data = get_data(streams, building, start, end)
+
+            building_df = self.preprocess_data(data, site_config, model_conf, streams)
+
+            # FIXME it tries to convert gas meter data to power (in kW).
+            # the function itself needs to be more general.
+            # also conversion constants are just based on assumptions.
+            if hasattr(model_conf, "convert_m3_kw") and model_conf.convert_m3_kw:
+                building_df = self.m3_to_kw(building_df.copy(), cv=site_config.cv, efficiency=site_config.boiler_efficiency)
+
+            model, preds = train_site_model(building_df, site_config.site, model_conf, predictions)
             predictions.append(preds)
             models[model_conf] = model
 
@@ -302,8 +281,7 @@ class TrainSite:
                 output = model_conf.output
                 model_df = sim_df[inputs]
 
-                inputs_no_lags = model.attrs["input_cols"] + \
-                    [str(i) for i in model_conf.derived_inputs]
+                inputs_no_lags = model.attrs["input_cols"] + [str(i) for i in model_conf.derived_inputs]
                 all_inputs_no_lags.extend(inputs_no_lags)
 
                 # set chilled water valve to square wave, cycling every N steps
@@ -326,16 +304,14 @@ class TrainSite:
 
                 # Run the prediction and update the building_df with result
                 prediction = model.predict(predict_df)
-                predict_time = time + \
-                    timedelta(minutes=model_conf.horizon_mins)
+                predict_time = time + timedelta(minutes=model_conf.horizon_mins)
                 sim_df.loc[predict_time, str(output)] = prediction
 
         # plot the simulation results with lines
         title = f"Simulation results for {site_config.site}"
         targets = [str(m.target) for m in site_config.ahu_models]
         actuals = [c for c in sim_df.columns if c.endswith("_actual")]
-        p = sim_df[targets + [str(i) for i in all_inputs_no_lags] +
-                   list(actuals)].melt(ignore_index=False)
+        p = sim_df[targets + [str(i) for i in all_inputs_no_lags] + list(actuals)].melt(ignore_index=False)
         fig = px.line(p, x=p.index, y="value", color="variable", title=title)
         figs_to_html([fig], f"output/{title}", show=show_plots, verbose=1)
 
@@ -346,12 +322,10 @@ class TrainSite:
 
         def append_ahu_name(streams: DataFrame) -> DataFrame:
             if "type_path" in streams.columns:
-                streams["ahu_point"] = streams["type_path"].str.split(
-                    "|").apply(lambda x: x[0] == "AHU")
+                streams["ahu_point"] = streams["type_path"].str.split("|").apply(lambda x: x[0] == "AHU")
             if "name_path" in streams.columns:
                 streams["ahu_name"] = streams.apply(
-                    lambda x: x["name_path"].split(
-                        "|")[0] if x["ahu_point"] else None,
+                    lambda x: x["name_path"].split("|")[0] if x["ahu_point"] else None,
                     axis=1,
                 )
             return streams
@@ -371,8 +345,7 @@ class TrainSite:
             point: (set(input_streams[point]["ahu_name"]) if "ahu_name" in input_streams[point].columns else None) for point in input_streams.keys()
         }
 
-        input_ahus = [set(ahus)
-                      for ahus in input_ahu_dict.values() if ahus is not None]
+        input_ahus = [set(ahus) for ahus in input_ahu_dict.values() if ahus is not None]
 
         # check if there are common AHUs between target and all the input streams
         # TODO implement per-AHU modelling where possible. This isn't used yet.
@@ -400,8 +373,7 @@ class TrainSite:
         sim_df = sim_df[
             sorted(
                 sim_df.columns,
-                key=lambda x: x not in [
-                    m.target for m in site_config.ahu_models],
+                key=lambda x: x not in [m.target for m in site_config.ahu_models],
             )
         ]
 
@@ -435,8 +407,7 @@ def plot_df(df: DataFrame, title: str, out_dir: Path | None = None) -> Figure:
 
 def split_df(train_test_df: DataFrame, target_cols: list[str]) -> tuple[DataFrame, DataFrame, DataFrame, DataFrame]:
     """Split a dataframe into training and testing sets using alternate day strategy"""
-    train_test_df.columns = [str(c.name) if isinstance(
-        c, SemPath) else str(c) for c in train_test_df.columns]
+    train_test_df.columns = [str(c.name) if isinstance(c, SemPath) else str(c) for c in train_test_df.columns]
     train_test_df = train_test_df.sort_index().dropna()
     train, test = split_alternate_days(train_test_df, n_sets=2)
 
@@ -471,13 +442,11 @@ def get_data(
         start=start,
         end=end,
     )
-    target["data"], target_streams = rename_columns(
-        target["data"], target_streams)
+    target["data"], target_streams = rename_columns(target["data"], target_streams)
     # add column containing SemPath instance for later use
     target_streams["sem_path"] = [str(target_path)] * len(target_streams)
     # drop target_strems rows for which we have no columns
-    target_streams = target_streams.query(
-        "column_name in @target['data'].columns")
+    target_streams = target_streams.query("column_name in @target['data'].columns")
 
     target_data = TrainingData(
         data=target["data"],
@@ -498,26 +467,22 @@ def get_data(
 
     # rename data columns using brick classes, and add streams to inputs dict
     for i, point in tqdm(enumerate(streams["input_streams"].keys()), desc="Getting input data", total=len(inputs)):
-        inputs[i]["data"], inputs[i]["streams"] = rename_columns(
-            inputs[i]["data"], streams["input_streams"][point])
+        inputs[i]["data"], inputs[i]["streams"] = rename_columns(inputs[i]["data"], streams["input_streams"][point])
 
         # add column containing SemPath instances for later use
-        inputs[i]["streams"]["sem_path"] = [
-            str(point)] * len(inputs[i]["streams"])
+        inputs[i]["streams"]["sem_path"] = [str(point)] * len(inputs[i]["streams"])
 
         # remove any stream rows that we don't have data for
-        inputs[i]["streams"] = inputs[i]["streams"].query(
-            "column_name in @inputs[@i]['data'].columns")
+        inputs[i]["streams"] = inputs[i]["streams"].query("column_name in @inputs[@i]['data'].columns")
 
-    input_data = [TrainingData(
-        data=i["data"], streams=i["streams"], sample_rate=i["sample_rate"]) for i in inputs]
+    input_data = [TrainingData(data=i["data"], streams=i["streams"], sample_rate=i["sample_rate"]) for i in inputs]
 
     training_set = TrainingSet(target=target_data, inputs=input_data)
-    
 
     return training_set
 
-def elm_optuna_param_search(x_train: pd.DataFrame, y_train: pd.DataFrame, n_trials: int = 500) -> Pipeline:
+
+def elm_optuna_param_search(x_train: pd.DataFrame, y_train: pd.DataFrame, n_trials: int = 500) -> RegressorMixin:
     """
     Performs an optuna search for the best hyperparameters for an ELMRegressor model, trying to maximise cross-validation score on the
     provided training set.
@@ -531,23 +496,21 @@ def elm_optuna_param_search(x_train: pd.DataFrame, y_train: pd.DataFrame, n_tria
         """Optuna search for the ELMRegressor hyperparams"""
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            x, y = x_train, y_train
             regressor_obj = ELMRegressor(
                 n_neurons=trial.suggest_int("n_neurons", 10, 1000, log=False),
                 ufunc=trial.suggest_categorical("ufunc", ["tanh", "sigm", "relu", "lin"]),
-                alpha=trial.suggest_loguniform("alpha", 1e-7, 1e-1),
+                alpha=trial.suggest_float("alpha", 1e-7, 1e-1, log=True),
                 include_original_features=trial.suggest_categorical("include_original_features", [True, False]),
                 density=trial.suggest_float("density", 1e-3, 1, step=0.1),
                 pairwise_metric=trial.suggest_categorical("pairwise_metric", ["euclidean", "cityblock", "cosine", None]),
             )
 
-            pipeline = Pipeline([
-                ('scaler', StandardScaler()),
-                ('regressor', regressor_obj)
-            ])
-
-            score = cross_val_score(pipeline, x_train, y_train, n_jobs=-1, cv=3)
-            accuracy = score.mean()
+        try:
+            score = cross_val_score(regressor_obj, x_train, y_train, n_jobs=-1, cv=3)
+            accuracy = float(score.mean())
+        except Exception as e:
+            logger.error(f"Error during cross-validation: {e}")
+            return float("-inf")
         return accuracy
 
     with warnings.catch_warnings():
@@ -563,10 +526,7 @@ def elm_optuna_param_search(x_train: pd.DataFrame, y_train: pd.DataFrame, n_tria
     for key, value in trial.params.items():
         logger.info(f"    {key}: {value}")
 
-    model = Pipeline([
-        ('scaler', StandardScaler()),
-        ('regressor', ELMRegressor(**trial.params))
-    ])
+    model = ELMRegressor(**trial.params)
     return model
 
 
@@ -595,8 +555,7 @@ def train_site_model(
     _target_col = train_test_df.attrs["target_col"]
     _target_streams = train_test_df.attrs["streams"]["target_streams"]
 
-    train_test_df = train_test_df.resample(
-        f"{_sample_rate}min").median().copy()
+    train_test_df = train_test_df.resample(f"{_sample_rate}min").median().copy()
 
     # add any derived inputs produced by previous training runs
     if model_conf.derived_inputs:
@@ -613,34 +572,27 @@ def train_site_model(
 
     # split the data into training and testing sets
     train_x, train_y, test_x, test_y = split_df(train_test_df, target_cols)
-    train_x_unfilt, train_y_unfilt, test_x_unfilt, test_y_unfilt = split_df(
-        unfiltered_df, target_cols)
+    train_x_unfilt, train_y_unfilt, test_x_unfilt, test_y_unfilt = split_df(unfiltered_df, target_cols)
 
     # linear models
     # model = sklearn.linear_model.LinearRegression()
     model = ElasticNetCV(n_jobs=-1)  # very fast fitting
-    
-    #model = Pipeline([
-    #            ('scaler', MinMaxScaler()),
-    #            ('regressor', ElasticNetCV(n_jobs=-1))
-    #        ])
+
     # model = sklearn.linear_model.LassoCV(n_jobs=-1)
 
     # nonlinear models
     # model = ELMRegressor(**{'n_neurons': 119,'ufunc': 'sigm','alpha': 0.011,'include_original_features': True,'density': 0.7,
     # 'pairwise_metric': 'euclidean'})
-    #model = elm_optuna_param_search(train_x, train_y.to_numpy().ravel(), n_trials=500)
+    # model = elm_optuna_param_search(train_x, train_y.to_numpy().ravel(), n_trials=500)
     # model = sklearn.ensemble.RandomForestRegressor(n_jobs=-1, verbose=0, n_estimators=30)
     # model = ExtraTreesRegressor(n_jobs=-1, n_estimators=200)
     # model = TPOTRegressor(n_jobs=cpu_count(), max_time_seconds=60 * 30, max_eval_time_seconds=60, early_stop=3, verbose=1)
     # fit the model and print metrics
     model.fit(train_x, train_y.to_numpy().ravel())
-    #model["regressor"].feature_names_in_ = list(train_x.columns)
     model.feature_names_in_ = list(train_x.columns)
     test_pred = pd.Series(model.predict(test_x).ravel(), index=test_x.index)
     train_pred = pd.Series(model.predict(train_x).ravel(), index=train_x.index)
-    
-    
+
     # also predict on the unfiltered data, so we can feed it to subsequent models
     # TODO does this cause us to use predictions from the training set?
     unfilt_pred = pd.concat(
@@ -657,11 +609,10 @@ def train_site_model(
     ).sort_index()
     unfilt_pred.name = model_conf.output if model_conf.output else f"{target_cols[0]}"
 
-    # report accuracy    
+    # report accuracy
     r2 = r2_score(test_y, test_pred)
     rmse = root_mean_squared_error(test_y, test_pred)
-    logger.info(
-        f"'{target_cols[0]}' {type(model).__name__} model: R2={r2:.3f}, RMSE={rmse:.3f}")
+    logger.info(f"'{target_cols[0]}' {type(model).__name__} model: R2={r2:.3f}, RMSE={rmse:.3f}")
     logger.info(f"Model: {model}")
 
     # shift input cols back up (shifted down in preprocessing) by the horizon so the plots are aligned
@@ -698,7 +649,7 @@ def train_site_model(
         features = dict(zip(np.round(model.coef_, 4), model.feature_names_in_))
         features = dict(sorted(features.items(), reverse=True))
         coeff_str = [f"{k}: {v}" for k, v in features.items()]
-        formatted_coeff_str = '\n'.join(coeff_str)
+        formatted_coeff_str = "\n".join(coeff_str)
         logger.info(f"Model coefficients: \n{formatted_coeff_str}")
 
     if draw_plots:
@@ -707,15 +658,13 @@ def train_site_model(
         train_test_df[f"{target_cols[0]}_test_pred"] = test_pred.copy()
         train_test_df[f"{target_cols[0]}_train_pred"] = train_pred.copy()
         fig1 = plot_df(
-            train_test_df.drop(columns=lagged_cols).resample(
-                f"{sample_rate_mins}min").first(),
+            train_test_df.drop(columns=lagged_cols).resample(f"{sample_rate_mins}min").first(),
             title,
         )
 
         # scatterplot of test_pred vs target values
         title = f"Predictions vs Actuals - target={target_cols[0]}, site={site}, model={type(model).__name__}"
-        fig2 = px.scatter(x=test_y[target_cols[0]],
-                          y=test_pred.ravel(), title=title)
+        fig2 = px.scatter(x=test_y[target_cols[0]], y=test_pred.ravel(), title=title)
         fig2.update_layout(xaxis_title="Actual", yaxis_title="Predicted")
         fig2.data[0].name = "test"
         fig2.add_scatter(
