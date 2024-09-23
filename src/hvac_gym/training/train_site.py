@@ -129,7 +129,7 @@ class TrainSite:
         cos_values = np.cos(2 * np.pi * column / (max_value + 0.00001))
         return sin_values, cos_values
 
-    def m3_to_kw(self, df: DataFrame, cv: float, efficiency: float) -> DataFrame:
+    def m3_to_kw(self, df: DataFrame, target: SemPath, cv: float, efficiency: float) -> DataFrame:
         """
         Convert gas usage from m³ to kW.
 
@@ -139,11 +139,11 @@ class TrainSite:
         :param efficiency (float): efficiency of the boiler.
         :return df (DataFrame): dataframe with gas meter column converted to power in kW.
         """
-        gas_usage = df.iloc[:, 0]
+        gas_usage = df[target]
         time_hours = (df.attrs["sample_rate_mins"]) / 60
         energy_kwh = gas_usage * cv * efficiency
         power_kw = energy_kwh / time_hours
-        df.iloc[:, 0] = power_kw
+        df[target] = power_kw
         return df
 
     def preprocess_data(
@@ -244,7 +244,7 @@ class TrainSite:
             # the function itself needs to be more general.
             # also conversion constants are just based on assumptions.
             if hasattr(model_conf, "convert_m3_kw") and model_conf.convert_m3_kw:
-                building_df = self.m3_to_kw(building_df.copy(), cv=site_config.cv, efficiency=site_config.boiler_efficiency)
+                building_df = self.m3_to_kw(building_df.copy(), model_conf.output, cv=site_config.cv, efficiency=site_config.boiler_efficiency)
 
             model, preds = train_site_model(building_df, site_config.site, model_conf, predictions)
             predictions.append(preds)
