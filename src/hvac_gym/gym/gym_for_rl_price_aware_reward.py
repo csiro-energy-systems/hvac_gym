@@ -18,13 +18,18 @@ from sklearn.base import RegressorMixin
 from tqdm import tqdm
 
 from hvac_gym.gym.hvac_agents import HVACAgent
+from hvac_gym.gym.kpis import calculate_thermal_discomfort_kpi
 from hvac_gym.sites.model_config import HVACModelConf, HVACSiteConf
 from hvac_gym.vis.vis_tools import figs_to_html
 
 initial = 0
 reset_para = 0
 result_learning = ""
+thermal_discomfort_kpi = 0
 pd.set_option("display.max_rows", 15, "display.max_columns", 20, "display.width", 300, "display.precision", 3)
+global_heating_usage = 0
+last_ahu_chw_valve_sp = 0
+last_ahu_sa_fan_speed = 0
 
 
 class HVACGym(Env[DataFrame, DataFrame]):
@@ -32,16 +37,17 @@ class HVACGym(Env[DataFrame, DataFrame]):
 
     state: DataFrame
 
-    def __init__(self, site_config: HVACSiteConf, reward_function: Callable[[Series], float], sim_start_date: datetime | None = None) -> None:
-        """Initializes the environment with the given configuration.
-        :param site_config: The configuration of the HVAC system
-        :param reward_function: The reward function to use in the simulation. This allows the called to customise the reward returned by the step()
-        function.  Inputs are the observations from the environment, and the output is a single float reward value.
-        :param sim_start_date: The start date for the simulation, or None to just start from the beginning of the dataset
-        """
+    def __init__(
+        self,
+        site_config: HVACSiteConf,
+        reward_function: Callable[[Series], float],
+        sim_start_date: datetime | None = None,
+        amount_of_observations: int = 0,
+    ) -> None:
         self.site_config = site_config
         self.reward_function = reward_function
         setpoints = site_config.setpoints
+        self.amount_of_observations = amount_of_observations
 
         site = site_config.site
         out_dir = site_config.out_dir
@@ -73,9 +79,9 @@ class HVACGym(Env[DataFrame, DataFrame]):
         # self.action_space = Box(low=-100, high=100, shape=(len(setpoints),))
         # self.observation_space = Box(low=-1000, high=10000, shape=(len(self.all_inputs),))
 
-        self.action_space = Box(low=0, high=100, shape=(3,))
+        self.action_space = Box(low=0, high=100, shape=(1,))
         # self.action_space = Box(low=-100, high=100, shape=(len(setpoints),))
-        self.observation_space = Box(low=0, high=100, shape=(4,), dtype=float)
+        self.observation_space = Box(low=0, high=100, shape=(self.amount_of_observations,), dtype=float)
         # self.observation_space = Box(low=0, high=100, shape=(len(self.all_inputs),))
 
         self.reset()
@@ -91,15 +97,17 @@ class HVACGym(Env[DataFrame, DataFrame]):
         # ) -> tuple[ObsType, dict[str, Any]]:
 
         global reset_para
+        global thermal_discomfort_kpi
         if (reset_para == 0) or (new_parameter == True):
             self.index = self.start_index
-            initial_observation = [0, 0, 0, 0]  # Example initial state
+            initial_observation = np.zeros(self.amount_of_observations)
             self.state = initial_observation  # Box(low=-1000, high=10000, shape=(len(self.all_inputs),))
             reset_para = 1
+            thermal_discomfort_kpi = 0
             return np.array(initial_observation), 0
         else:
             reset_para = 1
-            initial_observation = [0, 0, 0, 0]  # Example initial state
+            initial_observation = np.zeros(self.amount_of_observations)
             return np.array(initial_observation), 0
 
     @overrides
@@ -134,12 +142,11 @@ class HVACGym(Env[DataFrame, DataFrame]):
             inputs = model.feature_names_in_
             output = model_conf.output
             model_df = sim_df[inputs]
-            ##### Baseline3 lib generates the actions in np.array format, so I need to revise it back like this:
-            columns = ["ahu_chw_valve_sp", "ahu_hw_valve_sp", "ahu_sa_fan_speed"]
+            # columns = ["ahu_chw_valve_sp", "ahu_hw_valve_sp", "ahu_sa_fan_speed"]#disable OA DAMPER--Xinlin
+            # columns = ["ahu_chw_valve_sp",  "ahu_sa_fan_speed"]#disable HW--Xinlin
+            columns = ["ahu_chw_valve_sp"]  # disable HW--Xinlin
             # Check if 'action' already has the right columns and structure
             if not isinstance(action, pd.DataFrame) or not all(col in action.columns for col in columns):
-                # If 'action' is not a DataFrame or doesn't have the right columns
-                # Assuming 'action' is an ndarray (3,) as expected
                 if isinstance(action, np.ndarray):
                     # Check if action has extra dimensions and correct it
                     if action.ndim > 2:
@@ -150,6 +157,8 @@ class HVACGym(Env[DataFrame, DataFrame]):
                     action = pd.DataFrame([action], columns=columns)
                 # Add the 'od' column with default value 0
                 action["ahu_oa_damper"] = 0
+                action["ahu_hw_valve_sp"] = 0
+                action["ahu_sa_fan_speed"] = 100
             # set actions here, if applicable to this model
 
             # set actions here, if applicable to this model
@@ -174,22 +183,64 @@ class HVACGym(Env[DataFrame, DataFrame]):
         self.state = sim_df.loc[current_time]
         self.state["hour"] = current_hour
 
+        ahu_chw_valve_sp = max(action["ahu_chw_valve_sp"].to_numpy()[0], 0)
+        ahu_hw_valve_sp = max(action["ahu_hw_valve_sp"].to_numpy()[0], 0)
+        ahu_sa_fan_speed = max(action["ahu_sa_fan_speed"].to_numpy()[0], 0)
         outdoor_temp = self.state[str(oa_temp)]
         indoor_temp = self.state[str(zone_temp)]
+        global last_ahu_chw_valve_sp, last_ahu_sa_fan_speed
+        import random
+
+        if last_ahu_chw_valve_sp >= 95:
+            indoor_temp = min(indoor_temp, 23.990) + random.uniform(0.001, 0.01) * (outdoor_temp - 11) / (37 - 11)
+            case = 0
+        elif 90 <= last_ahu_chw_valve_sp < 95:
+            indoor_temp = min(indoor_temp, 23.990) + random.uniform(0.01, 0.05) * (outdoor_temp - 11) / (37 - 11)
+            case = 1
+        elif 80 <= last_ahu_chw_valve_sp < 90:
+            indoor_temp = min(indoor_temp, 23.990) + random.uniform(0.01, 0.5) * (outdoor_temp - 11) / (37 - 11)
+            case = 2
+        elif 70 <= last_ahu_chw_valve_sp < 80:
+            indoor_temp = min(indoor_temp, 23.990) + random.uniform(0.1, 0.5) * (outdoor_temp - 11) / (37 - 11)
+            case = 3
+        else:
+            case = -1
+
+        cooling_usage = max(self.state["chiller_elec_power"], 0)
+        last_ahu_chw_valve_sp = ahu_chw_valve_sp
+        last_ahu_sa_fan_speed = ahu_sa_fan_speed
+
         if 7 <= current_hour <= 20:
             low_boundary = 21
             up_boundary = 24
         else:
             low_boundary = 15
             up_boundary = 30
-        names = ["indoor_temp", "outdoor_temp", "up_boundary", "low_boundary"]
-        observations = pd.Series(np.array([indoor_temp, outdoor_temp, up_boundary, low_boundary]), index=names)
-        reward = self.reward_function(observations)
+        # ToU--> need to revise to adopt NSW's market
+        price = 0.0444
+        if 7 <= current_hour <= 12:
+            price = 0.05413
+        elif 12 < current_hour <= 15:
+            price = 0.0888
+        elif 15 < current_hour <= 18:
+            price = 0.05413
+        predicted_hour = current_hour + 2
+        predicted_price = 0.0444
+        if 7 <= predicted_hour <= 12:
+            predicted_price = 0.05413
+        elif 12 < predicted_hour <= 15:
+            predicted_price = 0.0888
+        elif 15 < predicted_hour <= 18:
+            predicted_price = 0.05413
+
+        names = ["indoor_temp", "outdoor_temp", "up_boundary", "low_boundary", "cooling_usage", "price", "predicted_price"]
+        observations = pd.Series(np.array([indoor_temp, outdoor_temp, up_boundary, low_boundary, cooling_usage, price, predicted_price]), index=names)
+        reward, thermal_reward, energy_reward, ref, weight_T, scenario = self.reward_function(observations)
         terminated: bool = False
         info: dict[Any, Any] = {}
-        ahu_chw_valve_sp = action["ahu_chw_valve_sp"].values
-        ahu_hw_valve_sp = action["ahu_hw_valve_sp"].values
-        ahu_sa_fan_speed = action["ahu_sa_fan_speed"].values
+        global thermal_discomfort_kpi
+        current_thermal_discomfort_kpi = calculate_thermal_discomfort_kpi(indoor_temp, up_boundary, low_boundary, thermal_discomfort_kpi)
+        thermal_discomfort_kpi = current_thermal_discomfort_kpi
         global initial
         global result_learning
         result_sting = (
@@ -201,15 +252,35 @@ class HVACGym(Env[DataFrame, DataFrame]):
             + ","
             + str(reward)
             + ","
+            + str(thermal_reward)
+            + ","
+            + str(energy_reward)
+            + ","
+            + str(ref)
+            + ","
+            + str(weight_T)
+            + ","
             + str(outdoor_temp)
             + ","
-            + str(ahu_chw_valve_sp[0])
+            + str(ahu_chw_valve_sp)
             + ","
-            + str(ahu_hw_valve_sp[0])
+            + str(ahu_hw_valve_sp)
             + ","
-            + str(ahu_sa_fan_speed[0])
+            + str(ahu_sa_fan_speed)
             + ","
             + str(current_hour)
+            + ","
+            + str(cooling_usage)
+            + ","
+            + str(price)
+            + ","
+            + str(predicted_price)
+            + ","
+            + str(current_thermal_discomfort_kpi)
+            + ","
+            + str(scenario)
+            + ","
+            + str(case)
             + "\n"
         )
         result_sting.replace("[", "").replace("]", "")
@@ -218,7 +289,7 @@ class HVACGym(Env[DataFrame, DataFrame]):
             current_time = now.strftime("%dth-%b-%H-%M")
             result_learning = "C:\\Users\\wan397\\OneDrive - CSIRO\\Desktop\\RL_WORK_SUMMARY\\New_Newcastle_site_gym_" + current_time + "_.csv"
             f_1 = open(result_learning, "w+")
-            record = "indoor temp,boundary,boundary,reward,outdoor air,ahu_chw_valve_sp,ahu_hw_valve_sp,fan_speed,hour\n"
+            record = "indoor_temp,boundary,boundary,reward,thermal_reward,energy_reward,ref,weight_T,outdoor air,ahu_chw_valve_sp,ahu_hw_valve_sp,fan_speed,hour,cooling_usage,price,predicted_price, kpi, scenario\n"
             f_1.write(record)
             f_1.close()
             initial = 1

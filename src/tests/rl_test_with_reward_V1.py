@@ -6,19 +6,17 @@ from dch.utils.init_utils import cd_project_root
 from pandas import DataFrame
 from pendulum import parse
 from pandas import DataFrame, Series
-from hvac_gym.gym.gym_for_RL_inherent_reward import HVACGym, run_gym_with_agent
+from hvac_gym.gym.gym_for_rl_inherent_reward import HVACGym, run_gym_with_agent
 from hvac_gym.gym.hvac_agents import MinMaxCoolAgent
 from hvac_gym.sites import newcastle_config
 from datetime import datetime
 from gymnasium.wrappers import NormalizeObservation
 from gym.wrappers import RescaleAction
-from stable_baselines3 import DQN, A2C, PPO, SAC
+
 import math
 
 cd_project_root()
 Path("output").mkdir(exist_ok=True)
-initial = 0
-result_learning = ""
 
 
 def optimized_outdoor_diff(x):
@@ -51,20 +49,16 @@ def reward_function_thermal_only(low_boundary, up_boundary, indoor_temp, outdoor
     return R_
 
 
-class RlAgent:
+class Rl_test:
     now = datetime.now()
     current_time = now.strftime("%dth-%b-%H-%M")
-    initial = 0
 
     def test_gym_with_RL(self) -> None:
         time_interval = 10
-        """Tests a long simulation of the gym environment"""
         start = parse("2023-01-01", tz="Australia/Sydney")
         site_config = newcastle_config.model_conf
 
         def example_reward_func(observations: Series) -> float:
-            """Example (but fairly pointless) reward function.
-            Replace with your own bespoke reward function calculated from anything in the observations."""
             indoor_temp = observations.iloc[0]
             outdoor_temp = observations.iloc[1]
             up_boundary = observations.iloc[2]
@@ -77,30 +71,36 @@ class RlAgent:
         print("Action Space:", environment.action_space)
         print("Observation Space:", environment.observation_space)
 
-        training_days = 150
-        test_days = 10
+        training_days = 200
+        test_days = 1  # 14
         training_steps = int((60 * 24 / time_interval) * training_days)
         test_steps = int(60 * 24 / time_interval * test_days)
-        _ent_coef_ = "auto"
-        agent = SAC("MlpPolicy", environment, learning_rate=0.001, batch_size=int(1 * (60 * 24 / time_interval)), ent_coef=_ent_coef_)
 
-        agent.learn(total_timesteps=training_steps)
-        print("learning progress is completed, now testing is started.")
+        from stable_baselines3 import DQN, A2C, PPO, SAC
 
-        step = 0
+        TRAIN_NEW_AGENT = False  # True
+        MODEL_Name = "CSIRO_gym_agent"
+        if TRAIN_NEW_AGENT == True:
+            _ent_coef_ = "auto"
+            agent = SAC("MlpPolicy", environment, learning_rate=0.001, batch_size=int(1 * (60 * 24 / time_interval)), ent_coef=_ent_coef_)
+            agent.learn(total_timesteps=training_steps)
+            agent.save(MODEL_Name)
+            print("learning progress is completed, now testing is started.")
+        else:
+            print("Launching the pre-trained agent for demo.")
+            agent = SAC.load(MODEL_Name)
+            print("Now testing is started.")
+
         obs = [0, 0, 0, 0]
         environment.reset()
         for step in range(test_steps):
             try:
-                # environment.title = agent.name
                 print("now the current step is: ", step)
-                t0 = datetime.now()
                 print("--obs--")
                 print(obs)
                 print("--action--")
                 action, _ = agent.predict(obs, deterministic=True)  # c
                 print(action)
-                # string_action=str(action[0])+','+str(action[1])+','+str(action[0])+','+str(action[0])+'\n'
                 print("**********")
                 observation, reward, done, result_sting, _ = environment.step(action)
                 obs = observation
@@ -110,5 +110,5 @@ class RlAgent:
 
 
 if __name__ == "__main__":
-    test = RlAgent()
+    test = Rl_test()
     test.test_gym_with_RL()
