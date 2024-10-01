@@ -61,7 +61,7 @@ class ChillerOffFilter(PathFilter, BaseModel):
 """ An interim model that predicts the 'ambient_zone_temp' - ie what the zone temperature would have been without any mechanical heating or cooling
 then we feed that prediction to the zone_temp model to modify it based on the boiler power, valves, fans etc """
 ambient_zone_temp_model = HVACModelConf(
-    target=ahu_room_temp,
+    target=[ahu_room_temp],
     inputs=[
         oa_temp,
         chiller_elec_power,
@@ -76,7 +76,7 @@ ambient_zone_temp_model = HVACModelConf(
 """ Simple model of average building zone temp as a function of hot/chilled water valves, fan speeds and outside air temp and the ambient_zone_temp
 from the model above."""
 zone_temp_model = HVACModelConf(
-    target=ahu_room_temp,
+    target=[ahu_room_temp],
     inputs=[
         chiller_elec_power,
         gas_meter,

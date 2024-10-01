@@ -32,7 +32,7 @@ overrides = "^7.7.0"
 
 #dch-interface = {path = "../dch-interface-py", develop = true}
 #dch-interface = { git = "git@github.com:csiro-energy-systems/dch-interface-py.git", rev = "0.1.13" }
-dch-interface = "0.1.13"
+dch-interface = "1.0.0"
 pendulum = "^3.0.0"
 
 
