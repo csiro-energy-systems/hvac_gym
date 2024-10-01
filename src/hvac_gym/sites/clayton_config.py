@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from hvac_gym.sites.model_config import HVACModelConf, HVACSiteConf, PathFilter
 
 # FIXME this must use a general path to the gas meter data.
-gas_meter = SemPath(name="gas_meter", path=["Building_Gas_Meter hasPoint Usage_Sensor[name_path=='GasMt|GM006']"])
+gas_meter = SemPath(name="gas_meter", path=["Building_Gas_Meter hasPoint Usage_Sensor[name_path=='GasMt|GM006']"], override=True)
 
 
 """ Newcastle notes:
@@ -37,6 +37,7 @@ ambient_zone_temp = SemPath(
     path="Ambient_Zone_Temperature",
     description="Estimate of what the zone temperature would have been without any mechanical heating or cooling",
     validate_path=False,
+    override=True,
 )
 
 
@@ -61,7 +62,7 @@ class ChillerOffFilter(PathFilter, BaseModel):
 """ An interim model that predicts the 'ambient_zone_temp' - ie what the zone temperature would have been without any mechanical heating or cooling
 then we feed that prediction to the zone_temp model to modify it based on the boiler power, valves, fans etc """
 ambient_zone_temp_model = HVACModelConf(
-    target=[ahu_room_temp],
+    target=ahu_room_temp,
     inputs=[
         oa_temp,
         chiller_elec_power,
@@ -76,7 +77,7 @@ ambient_zone_temp_model = HVACModelConf(
 """ Simple model of average building zone temp as a function of hot/chilled water valves, fan speeds and outside air temp and the ambient_zone_temp
 from the model above."""
 zone_temp_model = HVACModelConf(
-    target=[ahu_room_temp],
+    target=ahu_room_temp,
     inputs=[
         chiller_elec_power,
         gas_meter,
