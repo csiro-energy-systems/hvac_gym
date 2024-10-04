@@ -7,7 +7,6 @@ from dch.paths.sem_paths import (
     ahu_hw_valve_sp,
     ahu_oa_damper,
     ahu_room_temp,
-    chiller_elec_power,
     oa_temp,
 )
 from overrides import overrides
@@ -17,7 +16,25 @@ from pydantic import BaseModel
 from hvac_gym.sites.model_config import HVACModelConf, HVACSiteConf, PathFilter
 
 # FIXME this must use a general path to the gas meter data.
-gas_meter = SemPath(name="gas_meter", path=["Building_Gas_Meter hasPoint Usage_Sensor[name_path=='GasMt|GM006']"], override=True)
+# gas_meter = SemPath(
+# name="gas_meter",
+# path=[
+# "Building_Gas_Meter hasPoint Usage_Sensor[name_path=='GasMt|GM006']"
+# ],
+# override=True)
+# FIXME GasMt|GM006 was removed in DCH 2.0. this GasMtPH caused significant drop in gas usage model metrics.
+gas_meter = SemPath(
+    name="gas_meter",
+    path=["Building_Gas_Meter hasPoint Usage_Sensor[name_path=='GasMt|Clayton.ClaytonB307.Misc_LvlB.Misc_Bldg307_LvlB_GasMtPH']"],
+    override=True,
+)
+
+
+chiller_elec_power = SemPath(
+    name="chiller_elec_power",
+    path=["Chiller isMeteredBy Electrical_Meter hasPoint Electric_Power_Sensor[unit=='unit:KiloW' and electricalPhases=='ABC']"],
+    override=True,
+)
 
 
 """ Newcastle notes:
@@ -129,7 +146,7 @@ ahu_hws_power_model = HVACModelConf(
 )
 
 model_conf = HVACSiteConf(
-    site=DCHBuilding("csiro", "clayton", "Building307", tz="Australia/Melbourne"),
+    site=DCHBuilding("csiro", "Clayton", "building307", tz="Australia/Melbourne"),
     plot_data=False,
     sim_start_date="2023-01-01",
     chiller_cop=2.0,

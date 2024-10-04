@@ -12,10 +12,10 @@ import optuna
 import pandas as pd
 import plotly.io as pio
 from dch.dch_interface import DCHBuilding, DCHInterface
-from dch.utils.dch_model_utils import flatten 
 from dch.paths.dch_paths import SemPath
 from dch.paths.sem_paths import ahu_chw_valve_sp, ahu_hw_valve_sp
 from dch.utils.data_utils import resample_and_join_streams
+from dch.utils.dch_model_utils import flatten
 from dch.utils.init_utils import cd_project_root
 from dotenv import load_dotenv
 from joblib import Memory
@@ -96,8 +96,8 @@ class TrainSite:
         target_point = model_conf.target
         input_points = model_conf.inputs
 
-        target_stream = self.dch.find_streams_path(building, target_point, long_format=True)
-        input_streams = {point: self.dch.find_streams_path(building, point, long_format=True) for point in input_points}
+        target_stream = self.dch.path_search(building, target_point, long_format=True)
+        input_streams = {point: self.dch.path_search(building, point, long_format=True) for point in input_points}
 
         missing_streams = ([point for point, point_id in input_streams.items() if point_id.empty]) + ([target_point] if target_stream.empty else [])
         if len(missing_streams) > 0:
@@ -161,16 +161,17 @@ class TrainSite:
 
         # concat input all point_id into a dataframe
         building_input_streams = pd.concat([i.point_id for i in inputs])
-        building_cols = list(flatten(building_input_streams["column_name"]))
+        building_cols = list(flatten(building_input_streams["data_column_name"]))
         building_df, sample_rate = resample_and_join_streams([i.data[[c for c in building_cols if c in i.data.columns]] for i in inputs])
 
         self.sample_rate = sample_rate
 
         # take median of each group of building data types (e.g. there's often several OAT sensors)
         # use SemPath instances for new aggregated column names
-        building_stream_types = building_input_streams.groupby("type_path").aggregate({"column_name": lambda x: list(x)})
+        building_stream_types = building_input_streams.groupby("type_path").aggregate({"data_column_name": lambda x: list(x)})
+
         for stream_type in building_stream_types.index:
-            cols = [c for c in building_stream_types.loc[stream_type, "column_name"] if c in building_df.columns]
+            cols = [c for c in building_stream_types.loc[stream_type, "data_column_name"] if c in building_df.columns]
             sempath = building_input_streams.query("type_path == @stream_type")["sem_path"].unique()[0]
             building_df[sempath] = building_df[cols].median(axis=1, skipna=True)
             # building_df[f"{stream_type}_total"] = building_df[cols].sum(axis=1, skipna=True)
@@ -187,7 +188,7 @@ class TrainSite:
         target_col = model_conf.target
 
         # append the median of the target data to the building data
-        target_cols = list(target.point_id["column_name"])
+        target_cols = list(target.point_id["data_column_name"])
         target_df = target.data[target_cols]
         target_df = pd.DataFrame(target_df.median(axis=1), columns=[target_col])
 
@@ -434,19 +435,26 @@ def get_data(
     """
     target_path = list(point_id["target_streams"].keys())[0]
     target_streams = point_id["target_streams"][target_path]
+    target_streams = target_streams.loc[np.logical_not(target_streams["point_id"].isna())]
+
+    # FIXME some point_id s are nan when querying for oa_temp
+    for point in point_id["input_streams"].keys():
+        if "point_id" in point_id["input_streams"][point].columns:
+            point_id["input_streams"][point] = point_id["input_streams"][point].loc[point_id["input_streams"][point]["point_id"].notna()]
 
     dch = DCHInterface()
     target = dch.get_joined_point_data(
         target_streams["point_id"].explode().unique().tolist(),
-        building=building,
         start=start,
         end=end,
     )
-    target["data"], target_streams = DCHInterface.building_connector.rename_data_columns(target["data"], target_streams)
+
+    target["data"], target_streams = dch.building_connector.rename_data_columns(target["data"], target_streams, ["subtype_path"])
+
     # add column containing SemPath instance for later use
     target_streams["sem_path"] = [str(target_path)] * len(target_streams)
     # drop target_strems rows for which we have no columns
-    target_streams = target_streams.query("column_name in @target['data'].columns")
+    target_streams = target_streams.query("data_column_name in @target['data'].columns")
 
     target_data = TrainingData(
         data=target["data"],
@@ -457,7 +465,6 @@ def get_data(
     inputs = [
         dch.get_joined_point_data(
             point_id["input_streams"][point]["point_id"].explode().unique().tolist(),
-            building=building,
             start=start,
             end=end,
         )
@@ -467,13 +474,15 @@ def get_data(
 
     # rename data columns using brick classes, and add point_id to inputs dict
     for i, point in tqdm(enumerate(point_id["input_streams"].keys()), desc="Getting input data", total=len(inputs)):
-        inputs[i]["data"], inputs[i]["point_id"] = DCHInterface.building_connector.rename_data_columns(inputs[i]["data"], point_id["input_streams"][point])
+        inputs[i]["data"], inputs[i]["point_id"] = dch.building_connector.rename_data_columns(
+            inputs[i]["data"], point_id["input_streams"][point], ["subtype_path"]
+        )
 
         # add column containing SemPath instances for later use
         inputs[i]["point_id"]["sem_path"] = [str(point)] * len(inputs[i]["point_id"])
 
         # remove any stream rows that we don't have data for
-        inputs[i]["point_id"] = inputs[i]["point_id"].query("column_name in @inputs[@i]['data'].columns")
+        inputs[i]["point_id"] = inputs[i]["point_id"].query("data_column_name in @inputs[@i]['data'].columns")
 
     input_data = [TrainingData(data=i["data"], point_id=i["point_id"], sample_rate=i["sample_rate"]) for i in inputs]
 

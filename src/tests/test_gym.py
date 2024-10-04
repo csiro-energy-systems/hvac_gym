@@ -23,7 +23,6 @@ class TestGym:
     def test_gym_step(self) -> None:
         """Tests a single step of teh gym environment"""
         from hvac_gym.sites import clayton_config
-    
 
         site_config = clayton_config.model_conf
         env = HVACGym(site_config, reward_function=lambda x: 0.0)
@@ -49,8 +48,7 @@ class TestGym:
 
         env = HVACGym(site_config, reward_function=lambda x: 0.0)
         agent = MinMaxHotAgent(env, cycle_steps=100, hot_hwv_setpoint=100)
-        run_gym_with_agent(env, agent, site_config,
-                           max_steps=10, show_plot=False)
+        run_gym_with_agent(env, agent, site_config, max_steps=10, show_plot=False)
 
     @pytest.mark.manual("Long run, manual launch only")
     @pytest.mark.integration
@@ -63,21 +61,20 @@ class TestGym:
         def example_reward_func(observations: Series) -> float:
             """Example (but fairly pointless) reward function.
             Replace with your own bespoke reward function calculated from anything in the observations."""
-            
+
             chiller_elec_power = SemPath(
-                name="chiller_elec_power", path=[
-                    "Chiller isFedBy Electrical_Meter hasPoint Electrical_Power_Sensor[(unit=='unit:KiloW') & (electricalPhases=='ABC')]",
-                    "Chiller isFedBy Electrical_Circuit isFedBy Electrical_Meter hasPoint Electrical_Power_Sensor[(unit=='unit:KiloW') & (electricalPhases=='ABC')]",
+                name="chiller_elec_power",
+                path=[
+                    "Chiller isMeteredBy Electrical_Meter hasPoint Electric_Power_Sensor[unit=='unit:KiloW' and electricalPhases=='ABC']",
                 ],
+                override=True,
             )
 
             return float(observations[str(chiller_elec_power)] + observations[str(ahu_room_temp)])
 
-        env = HVACGym(
-            site_config, reward_function=example_reward_func, sim_start_date=start)
+        env = HVACGym(site_config, reward_function=example_reward_func, sim_start_date=start)
         agent = MinMaxHotAgent(env, cycle_steps=100, hot_hwv_setpoint=100)
-        obs, rewards = run_gym_with_agent(
-            env, agent, site_config, max_steps=max_steps, show_plot=False)
+        obs, rewards = run_gym_with_agent(env, agent, site_config, max_steps=max_steps, show_plot=False)
         obs_df = pd.concat(obs, axis=1).T
         obs_df["reward"] = rewards
 
