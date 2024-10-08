@@ -32,10 +32,11 @@ overrides = "^7.7.0"
 
 #dch-interface = {path = "../dch-interface-py", develop = true}
 #dch-interface = { git = "git@github.com:csiro-energy-systems/dch-interface-py.git", rev = "0.1.13" }
-dch-interface = "1.0.0"
+dch-interface = "1.0.2"
 pendulum = "^3.0.0"
 
 
+types-pytz = "^2024.2.0.20241003"
 [tool.poetry.group.dev.dependencies]
 pytest = "^6.2.3"
 Sphinx = "^7.3.7"
@@ -59,6 +60,7 @@ flameprof = "^0.4"
 snakeviz = "^2.2.0"
 
 
+types-pytz = "^2024.2.0.20241003"
 [[tool.poetry.source]]
 name = "PyPI"
 priority = "primary"

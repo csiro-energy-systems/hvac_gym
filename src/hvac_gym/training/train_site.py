@@ -4,6 +4,7 @@ from pathlib import Path
 
 import dill
 import matplotlib
+import pendulum
 
 matplotlib.use("Agg")
 
@@ -443,23 +444,23 @@ def get_data(
             point_id["input_streams"][point] = point_id["input_streams"][point].loc[point_id["input_streams"][point]["point_id"].notna()]
 
     dch = DCHInterface()
-    target = dch.get_joined_point_data(
+    target, sample_rate = dch.get_joined_point_data(
         target_streams["point_id"].explode().unique().tolist(),
         start=start,
         end=end,
     )
 
-    target["data"], target_streams = dch.building_connector.rename_data_columns(target["data"], target_streams, ["subtype_path"])
+    target, target_streams = dch.building_connector.rename_data_columns(target, target_streams, ["subtype_path"])
 
     # add column containing SemPath instance for later use
     target_streams["sem_path"] = [str(target_path)] * len(target_streams)
     # drop target_strems rows for which we have no columns
-    target_streams = target_streams.query("data_column_name in @target['data'].columns")
+    target_streams = target_streams.query("data_column_name in @target.columns")
 
     target_data = TrainingData(
-        data=target["data"],
+        data=target,
         point_id=target_streams,
-        sample_rate=target["sample_rate"],
+        sample_rate=sample_rate,
     )
 
     inputs = [
@@ -473,19 +474,25 @@ def get_data(
     ]
 
     # rename data columns using brick classes, and add point_id to inputs dict
-    for i, point in tqdm(enumerate(point_id["input_streams"].keys()), desc="Getting input data", total=len(inputs)):
-        inputs[i]["data"], inputs[i]["point_id"] = dch.building_connector.rename_data_columns(
-            inputs[i]["data"], point_id["input_streams"][point], ["subtype_path"]
-        )
+    for i, point in tqdm(enumerate(point_id["input_streams"].keys()), desc="Getting input data", total=len(point_id["input_streams"])):
+        input_data, input_sample_rate = inputs[i]  # Unpack the DataFrame and sample rate from inputs
 
-        # add column containing SemPath instances for later use
-        inputs[i]["point_id"]["sem_path"] = [str(point)] * len(inputs[i]["point_id"])
+        # Rename data columns for the input data and point_id streams
+        input_data, input_point_id = dch.building_connector.rename_data_columns(input_data, point_id["input_streams"][point], ["subtype_path"])
 
-        # remove any stream rows that we don't have data for
-        inputs[i]["point_id"] = inputs[i]["point_id"].query("data_column_name in @inputs[@i]['data'].columns")
+        # Add a column containing SemPath instances for later use
+        input_point_id["sem_path"] = [str(point)] * len(input_point_id)
 
-    input_data = [TrainingData(data=i["data"], point_id=i["point_id"], sample_rate=i["sample_rate"]) for i in inputs]
+        # Remove any stream rows that we don't have data for in the input DataFrame
+        input_point_id = input_point_id.query("data_column_name in @input_data.columns")
 
+        # Update the modified input back to the inputs list
+        inputs[i] = (input_data, input_point_id, input_sample_rate)
+
+    # Create TrainingData objects for each input
+    input_data = [TrainingData(data=i[0], point_id=i[1], sample_rate=i[2]) for i in inputs]
+
+    # Create the final TrainingSet object with target and input data
     training_set = TrainingSet(target=target_data, inputs=input_data)
 
     return training_set
@@ -700,8 +707,10 @@ if __name__ == "__main__":
     # start_date = end_date - timedelta(days=200)
 
     # fixed dates will reuse data caching
-    start_date = datetime(2022, 10, 1)
-    end_date = datetime(2023, 6, 26)
+    # FIXME timezone needs to go to config
+    tz = pendulum.timezone("Australia/Sydney")
+    start_date = datetime(2022, 10, 1, tzinfo=tz)
+    end_date = datetime(2023, 6, 26, tzinfo=tz)
 
     site = TrainSite()
     site.run(clayton_config.model_conf, start_date, end_date)
