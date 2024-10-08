@@ -4,6 +4,7 @@ from pathlib import Path
 
 import dill
 import matplotlib
+import pendulum
 
 matplotlib.use("Agg")
 
@@ -12,10 +13,10 @@ import optuna
 import pandas as pd
 import plotly.io as pio
 from dch.dch_interface import DCHBuilding, DCHInterface
-from dch.dch_model_utils import flatten, rename_columns
 from dch.paths.dch_paths import SemPath
 from dch.paths.sem_paths import ahu_chw_valve_sp, ahu_hw_valve_sp
 from dch.utils.data_utils import resample_and_join_streams
+from dch.utils.dch_model_utils import flatten
 from dch.utils.init_utils import cd_project_root
 from dotenv import load_dotenv
 from joblib import Memory
@@ -57,13 +58,13 @@ logger.info(f"Using function cache dir at: {func_cache_dir}")
 
 
 class TrainingData(BaseModel):
-    """A set of data and metadata for a set of related streams/points"""
+    """A set of data and metadata for a set of related point_id s"""
 
     # tell pydantic to allow dataframes etc
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     data: DataFrame
-    streams: DataFrame
+    point_id: DataFrame
     sample_rate: float
 
 
@@ -88,20 +89,20 @@ class TrainSite:
         self.dch = DCHInterface()
 
     def check_streams(self, model_conf: HVACModelConf, building: DCHBuilding) -> dict[str, dict[SemPath, DataFrame]]:
-        """Check that necessary streams exist
+        """Check that necessary point_id exist
         :param model_conf: the model configuration
-        :param building: the building to check streams for
+        :param building: the building to check point_id for
         :return:
         """
         target_point = model_conf.target
         input_points = model_conf.inputs
 
-        target_stream = self.dch.find_streams_path(building, target_point, long_format=True)
-        input_streams = {point: self.dch.find_streams_path(building, point, long_format=True) for point in input_points}
+        target_stream = self.dch.path_search(building, target_point, long_format=True)
+        input_streams = {point: self.dch.path_search(building, point, long_format=True) for point in input_points}
 
-        missing_streams = ([point for point, streams in input_streams.items() if streams.empty]) + ([target_point] if target_stream.empty else [])
+        missing_streams = ([point for point, point_id in input_streams.items() if point_id.empty]) + ([target_point] if target_stream.empty else [])
         if len(missing_streams) > 0:
-            logger.error(f"Missing target or input streams for {building}. Missing inputs: {missing_streams}")
+            logger.error(f"Missing target or input point_id for {building}. Missing inputs: {missing_streams}")
 
         return {
             "target_streams": {target_point: target_stream},
@@ -151,26 +152,27 @@ class TrainSite:
         data_set: TrainingSet,
         site_conf: HVACSiteConf,
         model_conf: HVACModelConf,
-        streams: dict[str, DataFrame],
+        point_id: dict[str, DataFrame],
     ) -> DataFrame:
         """Preprocesses the training data for each AHU and model
-        :param streams:
+        :param point_id:
         """
         target = data_set.target
         inputs = data_set.inputs
 
-        # concat input all streams into a dataframe
-        building_input_streams = pd.concat([i.streams for i in inputs])
-        building_cols = list(flatten(building_input_streams["column_name"]))
+        # concat input all point_id into a dataframe
+        building_input_streams = pd.concat([i.point_id for i in inputs])
+        building_cols = list(flatten(building_input_streams["data_column_name"]))
         building_df, sample_rate = resample_and_join_streams([i.data[[c for c in building_cols if c in i.data.columns]] for i in inputs])
 
         self.sample_rate = sample_rate
 
         # take median of each group of building data types (e.g. there's often several OAT sensors)
         # use SemPath instances for new aggregated column names
-        building_stream_types = building_input_streams.groupby("type_path").aggregate({"column_name": lambda x: list(x)})
+        building_stream_types = building_input_streams.groupby("type_path").aggregate({"data_column_name": lambda x: list(x)})
+
         for stream_type in building_stream_types.index:
-            cols = [c for c in building_stream_types.loc[stream_type, "column_name"] if c in building_df.columns]
+            cols = [c for c in building_stream_types.loc[stream_type, "data_column_name"] if c in building_df.columns]
             sempath = building_input_streams.query("type_path == @stream_type")["sem_path"].unique()[0]
             building_df[sempath] = building_df[cols].median(axis=1, skipna=True)
             # building_df[f"{stream_type}_total"] = building_df[cols].sum(axis=1, skipna=True)
@@ -187,7 +189,7 @@ class TrainSite:
         target_col = model_conf.target
 
         # append the median of the target data to the building data
-        target_cols = list(target.streams["column_name"])
+        target_cols = list(target.point_id["data_column_name"])
         target_df = target.data[target_cols]
         target_df = pd.DataFrame(target_df.median(axis=1), columns=[target_col])
 
@@ -213,7 +215,7 @@ class TrainSite:
         building_df.attrs["input_cols"] = input_cols
         building_df.attrs["target_col"] = target_col
         building_df.attrs["sample_rate_mins"] = target.sample_rate
-        building_df.attrs["streams"] = streams
+        building_df.attrs["point_id"] = point_id
 
         # shift (non-target) inputs down by the horizon so they are used to forecast future targets
         horizon_mins = model_conf.horizon_mins
@@ -233,12 +235,12 @@ class TrainSite:
             building = site_config.site
 
             # Gather and preprocess data
-            streams = self.check_streams(model_conf, building)
-            streams = self.validate_streams(streams)
+            point_id = self.check_streams(model_conf, building)
+            point_id = self.validate_streams(point_id)
 
-            data = get_data(streams, building, start, end)
+            data = get_data(point_id, building, start, end)
 
-            building_df = self.preprocess_data(data, site_config, model_conf, streams)
+            building_df = self.preprocess_data(data, site_config, model_conf, point_id)
 
             # FIXME it tries to convert gas meter data to power (in kW).
             # the function itself needs to be more general.
@@ -315,29 +317,29 @@ class TrainSite:
         fig = px.line(p, x=p.index, y="value", color="variable", title=title)
         figs_to_html([fig], f"output/{title}", show=show_plots, verbose=1)
 
-    def validate_streams(self, streams: dict[str, DataFrame]) -> dict[str, DataFrame]:
-        """Validate the streams and check for common AHUs between target and input streams"""
-        target_streams = list(streams["target_streams"].values())[0]
-        input_streams = streams["input_streams"]
+    def validate_streams(self, point_id: dict[str, DataFrame]) -> dict[str, DataFrame]:
+        """Validate the point_id and check for common AHUs between target and input point_id"""
+        target_streams = list(point_id["target_streams"].values())[0]
+        input_streams = point_id["input_streams"]
 
-        def append_ahu_name(streams: DataFrame) -> DataFrame:
-            if "type_path" in streams.columns:
-                streams["ahu_point"] = streams["type_path"].str.split("|").apply(lambda x: x[0] == "AHU")
-            if "name_path" in streams.columns:
-                streams["ahu_name"] = streams.apply(
+        def append_ahu_name(point_id: DataFrame) -> DataFrame:
+            if "type_path" in point_id.columns:
+                point_id["ahu_point"] = point_id["type_path"].str.split("|").apply(lambda x: x[0] == "AHU")
+            if "name_path" in point_id.columns:
+                point_id["ahu_name"] = point_id.apply(
                     lambda x: x["name_path"].split("|")[0] if x["ahu_point"] else None,
                     axis=1,
                 )
-            return streams
+            return point_id
 
-        # Get list of AHUs that the target streams apply to, if any
+        # Get list of AHUs that the target point_id apply to, if any
         target_ahus: set[str] = set()
         append_ahu_name(target_streams)
         if "ahu_name" in target_streams.columns:
             target_ahus = set(target_streams["ahu_name"].to_list())
             logger.info(f"Found target AHUs: {target_ahus}")
 
-        # Get list of AHUs that the input streams apply to, if any
+        # Get list of AHUs that the input point_id apply to, if any
         for point in input_streams.keys():
             append_ahu_name(input_streams[point])
 
@@ -347,11 +349,11 @@ class TrainSite:
 
         input_ahus = [set(ahus) for ahus in input_ahu_dict.values() if ahus is not None]
 
-        # check if there are common AHUs between target and all the input streams
+        # check if there are common AHUs between target and all the input point_id
         # TODO implement per-AHU modelling where possible. This isn't used yet.
         _common_ahus = set(target_ahus).intersection(*input_ahus)
 
-        return streams
+        return point_id
 
     def save_models_and_data(self, models: dict[HVACModelConf, Pipeline], model_dfs: list[DataFrame], site_config: HVACSiteConf) -> DataFrame:
         """
@@ -418,65 +420,79 @@ def split_df(train_test_df: DataFrame, target_cols: list[str]) -> tuple[DataFram
 
 # @memory.cache()
 def get_data(
-    streams: dict[str, DataFrame],
+    point_id: dict[str, DataFrame],
     building: DCHBuilding,
     start: datetime,
     end: datetime,
 ) -> TrainingSet:
     """
-    Gets a dictionary of dataframes for the target and input streams
+    Gets a dictionary of dataframes for the target and input point_id
     Each
-    :param streams: dictionary of target and input streams to get data for
+    :param point_id: dictionary of target and input point_id to get data for
     :param building: the building to get data for
     :param start: data start date
     :param end: data end date
-    :return: A TrainingSet object with data and metadata for all streams
+    :return: A TrainingSet object with data and metadata for all point_id
     """
-    target_path = list(streams["target_streams"].keys())[0]
-    target_streams = streams["target_streams"][target_path]
+    target_path = list(point_id["target_streams"].keys())[0]
+    target_streams = point_id["target_streams"][target_path]
+    target_streams = target_streams.loc[np.logical_not(target_streams["point_id"].isna())]
+
+    # FIXME some point_id s are nan when querying for oa_temp
+    for point in point_id["input_streams"].keys():
+        if "point_id" in point_id["input_streams"][point].columns:
+            point_id["input_streams"][point] = point_id["input_streams"][point].loc[point_id["input_streams"][point]["point_id"].notna()]
 
     dch = DCHInterface()
-    target = dch.get_df_by_stream_id(
-        target_streams["streams"].explode().unique().tolist(),
-        building=building,
+    target, sample_rate = dch.get_joined_point_data(
+        target_streams["point_id"].explode().unique().tolist(),
         start=start,
         end=end,
     )
-    target["data"], target_streams = rename_columns(target["data"], target_streams)
+
+    target, target_streams = dch.building_connector.rename_data_columns(target, target_streams, ["subtype_path"])
+
     # add column containing SemPath instance for later use
     target_streams["sem_path"] = [str(target_path)] * len(target_streams)
     # drop target_strems rows for which we have no columns
-    target_streams = target_streams.query("column_name in @target['data'].columns")
+    target_streams = target_streams.query("data_column_name in @target.columns")
 
     target_data = TrainingData(
-        data=target["data"],
-        streams=target_streams,
-        sample_rate=target["sample_rate"],
+        data=target,
+        point_id=target_streams,
+        sample_rate=sample_rate,
     )
 
     inputs = [
-        dch.get_df_by_stream_id(
-            streams["input_streams"][point]["streams"].explode().unique().tolist(),
-            building=building,
+        dch.get_joined_point_data(
+            point_id["input_streams"][point]["point_id"].explode().unique().tolist(),
             start=start,
             end=end,
         )
-        for point in streams["input_streams"].keys()
-        if "streams" in streams["input_streams"][point]
+        for point in point_id["input_streams"].keys()
+        if "point_id" in point_id["input_streams"][point]
     ]
 
-    # rename data columns using brick classes, and add streams to inputs dict
-    for i, point in tqdm(enumerate(streams["input_streams"].keys()), desc="Getting input data", total=len(inputs)):
-        inputs[i]["data"], inputs[i]["streams"] = rename_columns(inputs[i]["data"], streams["input_streams"][point])
+    # rename data columns using brick classes, and add point_id to inputs dict
+    for i, point in tqdm(enumerate(point_id["input_streams"].keys()), desc="Getting input data", total=len(point_id["input_streams"])):
+        input_data, input_sample_rate = inputs[i]  # Unpack the DataFrame and sample rate from inputs
 
-        # add column containing SemPath instances for later use
-        inputs[i]["streams"]["sem_path"] = [str(point)] * len(inputs[i]["streams"])
+        # Rename data columns for the input data and point_id streams
+        input_data, input_point_id = dch.building_connector.rename_data_columns(input_data, point_id["input_streams"][point], ["subtype_path"])
 
-        # remove any stream rows that we don't have data for
-        inputs[i]["streams"] = inputs[i]["streams"].query("column_name in @inputs[@i]['data'].columns")
+        # Add a column containing SemPath instances for later use
+        input_point_id["sem_path"] = [str(point)] * len(input_point_id)
 
-    input_data = [TrainingData(data=i["data"], streams=i["streams"], sample_rate=i["sample_rate"]) for i in inputs]
+        # Remove any stream rows that we don't have data for in the input DataFrame
+        input_point_id = input_point_id.query("data_column_name in @input_data.columns")
 
+        # Update the modified input back to the inputs list
+        inputs[i] = (input_data, input_point_id, input_sample_rate)
+
+    # Create TrainingData objects for each input
+    input_data = [TrainingData(data=i[0], point_id=i[1], sample_rate=i[2]) for i in inputs]
+
+    # Create the final TrainingSet object with target and input data
     training_set = TrainingSet(target=target_data, inputs=input_data)
 
     return training_set
@@ -553,7 +569,7 @@ def train_site_model(
     lagged_cols = train_test_df.attrs["lagged_cols"]
     _sample_rate = train_test_df.attrs["sample_rate_mins"]
     _target_col = train_test_df.attrs["target_col"]
-    _target_streams = train_test_df.attrs["streams"]["target_streams"]
+    _target_streams = train_test_df.attrs["point_id"]["target_streams"]
 
     train_test_df = train_test_df.resample(f"{_sample_rate}min").median().copy()
 
@@ -691,8 +707,10 @@ if __name__ == "__main__":
     # start_date = end_date - timedelta(days=200)
 
     # fixed dates will reuse data caching
-    start_date = datetime(2022, 10, 1)
-    end_date = datetime(2023, 6, 26)
+    # FIXME timezone needs to go to config
+    tz = pendulum.timezone("Australia/Sydney")
+    start_date = datetime(2022, 10, 1, tzinfo=tz)
+    end_date = datetime(2023, 6, 26, tzinfo=tz)
 
     site = TrainSite()
     site.run(clayton_config.model_conf, start_date, end_date)

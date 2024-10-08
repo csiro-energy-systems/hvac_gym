@@ -4,7 +4,8 @@ from pprint import pprint
 import pandas as pd
 import pytest
 from dch.paths.dch_paths import SemPath
-from dch.paths.sem_paths import ahu_chw_valve_sp, ahu_hw_valve_sp, ahu_oa_damper, ahu_sa_fan_speed, chiller_elec_power, zone_temp, ahu_room_temp
+
+# from dch.paths.sem_paths import ahu_chw_valve_sp, ahu_hw_valve_sp, ahu_oa_damper, ahu_sa_fan_speed, chiller_elec_power, zone_temp, ahu_room_temp
 from dch.utils.init_utils import cd_project_root
 from loguru import logger
 from pandas import DataFrame, Series
@@ -18,12 +19,43 @@ cd_project_root()
 Path("output").mkdir(exist_ok=True)
 
 
+chiller_elec_power = SemPath(
+    name="chiller_elec_power",
+    path=["Chiller isMeteredBy Electrical_Meter hasPoint Electric_Power_Sensor[unit=='unit:KiloW' and electricalPhases=='ABC']"],
+    override=True,
+)
+
+# FIXME currently override=False returns error
+ahu_chw_valve_sp = SemPath(
+    name="ahu_chw_valve_sp",
+    path="AHU hasPart Chilled_Water_Coil feeds Chilled_Water_Valve hasPoint Valve_Position_Sensor",
+    normalise_range=[0.0, 1.0],
+    override=True,
+)
+ahu_hw_valve_sp = SemPath(
+    name="ahu_hw_valve_sp",
+    path="AHU hasPart Hot_Water_Coil feeds Hot_Water_Valve hasPoint Valve_Position_Sensor",
+    normalise_range=[0.0, 1.0],
+    override=True,
+)
+ahu_oa_damper = SemPath(
+    name="ahu_oa_damper", path=["AHU hasPart Outside_Damper hasPoint Damper_Position_Sensor"], normalise_range=[0.0, 1.0], override=True
+)
+ahu_room_temp = SemPath(name="ahu_room_temp", path="AHU feeds HVAC_Zone hasPart Room hasPoint Air_Temperature_Sensor", override=True)
+oa_temp = SemPath(
+    name="oa_temp",
+    path=["Equipment hasPoint Outside_Air_Temperature_Sensor", "Outside_Air_Temperature_Sensor"],
+    desc="All outside air temperature sensors",
+    override=True,
+)
+ahu_sa_fan_speed = SemPath(name="ahu_sa_fan_speed", path="AHU hasPart Supply_Fan hasPoint Speed_Sensor", override=True)
+
+
 class TestGym:
     @pytest.mark.integration
     def test_gym_step(self) -> None:
         """Tests a single step of teh gym environment"""
         from hvac_gym.sites import clayton_config
-    
 
         site_config = clayton_config.model_conf
         env = HVACGym(site_config, reward_function=lambda x: 0.0)
@@ -49,8 +81,7 @@ class TestGym:
 
         env = HVACGym(site_config, reward_function=lambda x: 0.0)
         agent = MinMaxHotAgent(env, cycle_steps=100, hot_hwv_setpoint=100)
-        run_gym_with_agent(env, agent, site_config,
-                           max_steps=10, show_plot=False)
+        run_gym_with_agent(env, agent, site_config, max_steps=10, show_plot=False)
 
     @pytest.mark.manual("Long run, manual launch only")
     @pytest.mark.integration
@@ -63,21 +94,20 @@ class TestGym:
         def example_reward_func(observations: Series) -> float:
             """Example (but fairly pointless) reward function.
             Replace with your own bespoke reward function calculated from anything in the observations."""
-            
+
             chiller_elec_power = SemPath(
-                name="chiller_elec_power", path=[
-                    "Chiller isFedBy Electrical_Meter hasPoint Electrical_Power_Sensor[(unit=='unit:KiloW') & (electricalPhases=='ABC')]",
-                    "Chiller isFedBy Electrical_Circuit isFedBy Electrical_Meter hasPoint Electrical_Power_Sensor[(unit=='unit:KiloW') & (electricalPhases=='ABC')]",
+                name="chiller_elec_power",
+                path=[
+                    "Chiller isMeteredBy Electrical_Meter hasPoint Electric_Power_Sensor[unit=='unit:KiloW' and electricalPhases=='ABC']",
                 ],
+                override=True,
             )
 
             return float(observations[str(chiller_elec_power)] + observations[str(ahu_room_temp)])
 
-        env = HVACGym(
-            site_config, reward_function=example_reward_func, sim_start_date=start)
+        env = HVACGym(site_config, reward_function=example_reward_func, sim_start_date=start)
         agent = MinMaxHotAgent(env, cycle_steps=100, hot_hwv_setpoint=100)
-        obs, rewards = run_gym_with_agent(
-            env, agent, site_config, max_steps=max_steps, show_plot=False)
+        obs, rewards = run_gym_with_agent(env, agent, site_config, max_steps=max_steps, show_plot=False)
         obs_df = pd.concat(obs, axis=1).T
         obs_df["reward"] = rewards
 
