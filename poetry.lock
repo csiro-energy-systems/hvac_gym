@@ -4035,7 +4035,6 @@ optional = true
 python-versions = ">=3.7"
 files = [
     {file = "senaps_api_client-2.16.1a0-py3-none-any.whl", hash = "sha256:e32827dbb45246ab1a066cc32eec19d340e33059eb19759d7cdc68f394a6e7fc"},
-    {file = "senaps_api_client-2.16.1a0.tar.gz", hash = "sha256:725e361851d2f2a1da65d8f563887e5343772eae6cea50835a2b1082b5e7202a"},
 ]
 
 [package.dependencies]
@@ -4044,9 +4043,8 @@ requests = ">=2.22.0,<3.0.0"
 six = ">=1.7.3"
 
 [package.source]
-type = "legacy"
-url = "https://pkgs.dev.azure.com/csiro-energy/csiro-energy/_packaging/csiro-python-packages/pypi/simple"
-reference = "csiroenergy"
+type = "file"
+url = "lib/senaps_api_client-2.16.1a0-py3-none-any.whl"
 
 [[package]]
 name = "setuptools"
@@ -4698,4 +4696,4 @@ dch = ["dch-interface"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">3.11.0,<3.13"
-content-hash = "6c1a68485943740ea5f008171b7bf15d49e22bba10071e129c768af066b140f0"
+content-hash = "14b4d68e4502bbeb050adbfe7412bc2c1cc49ab553ffdebbf3b3dbc120501bcc"
