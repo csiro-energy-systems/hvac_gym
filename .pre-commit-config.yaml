@@ -73,3 +73,8 @@ repos:
       - id: check-shebang-scripts-are-executable
       - id: name-tests-test
         args: [ '--pytest-test-first' ]
+
+  - repo: https://github.com/python-poetry/poetry
+    rev: 1.8.0
+    hooks:
+    - id: poetry-check

@@ -4696,4 +4696,4 @@ dch = ["dch-interface"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">3.11.0,<3.13"
-content-hash = "14b4d68e4502bbeb050adbfe7412bc2c1cc49ab553ffdebbf3b3dbc120501bcc"
+content-hash = "ae6b0bb7c591778963b771fa06915f0613880c6eb16302b0e4d64fe3f96ae5a2"
