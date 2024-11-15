@@ -87,11 +87,10 @@ class TestGym:
     @pytest.mark.integration
     def test_gym_simulate_long(self) -> None:
         """Tests a long simulation of the gym environment"""
-        max_steps = 24 * 6
+        max_steps = 500
         chwv_sp = 100
         valve_on_off_hours = 12
-        # start = parse("2023-11-01", tz="Australia/Sydney")
-        start = parse("2023-12-14", tz="Australia/Sydney")  # 37°C day
+        start = parse("2023-10-01", tz="Australia/Sydney")
 
         site_config = newcastle_config.model_conf
 
@@ -102,7 +101,7 @@ class TestGym:
 
         env = HVACGym(site_config, reward_function=example_reward_func, sim_start_date=start)
         agent = MinMaxCoolAgent(env, cycle_steps=6 * valve_on_off_hours, cool_chwv_setpoint=chwv_sp)
-        obs, rewards = run_gym_with_agent(env, agent, site_config, max_steps=max_steps, show_plot=True)
+        obs, rewards = run_gym_with_agent(env, agent, site_config, max_steps=max_steps, show_plot=False)
         obs_df = pd.concat(obs, axis=1).T
         obs_df["reward"] = rewards
 
