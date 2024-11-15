@@ -64,6 +64,10 @@ jobs:
           pipx install poetry==${{ env.POETRY_VERSION }}
           poetry config virtualenvs.in-project true # necessary for .venv/ caching
 
+      # Test that we can install public dependencies only (no cache or PUBLISH_URL)
+      - name: Install dependencies
+        run: poetry install --no-interaction --sync
+
       # load cached venv if cache exists
       - name: Load cached venv
         id: cached-poetry-dependencies

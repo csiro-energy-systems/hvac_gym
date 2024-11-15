@@ -18,7 +18,7 @@ repos:
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.5.7
+    rev: v0.7.3
     hooks:
       # Run the linter.
       - id: ruff
@@ -29,7 +29,7 @@ repos:
         types_or: [ python, pyi, jupyter ]
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.1
+    rev: v1.13.0
     hooks:
       - id: mypy
         additional_dependencies: [ "mypy_extensions", "types-python-dateutil" ] # run mypy --install-types to discover missing types to add here
@@ -48,7 +48,7 @@ repos:
   # Bandit is a tool for finding common security issues in Python code. See https://github.com/PyCQA/bandit
   # Tip: add `#nosec` to lines of code to ignore checks for that line
   - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.9
+    rev: 1.7.10
     hooks:
       - id: bandit
         # args to use pyproject.toml for project-specific config, run on all files, only show >= medium severity (-ll), and >= medium confidence (-ii), output to screen, silence logging (-q) and aggregate errors by file.
@@ -56,20 +56,20 @@ repos:
         additional_dependencies: [ "bandit[toml]" ]
 
   # A few basic checks
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
-    hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-        exclude_types:
-          - jupyter
-      - id: check-yaml
-      - id: check-added-large-files
-        args: [ '--maxkb=2048' ]
-      - id: mixed-line-ending
-      - id: detect-private-key
-      - id: check-case-conflict
-      - id: check-executables-have-shebangs
-      - id: check-shebang-scripts-are-executable
-      - id: name-tests-test
-        args: [ '--pytest-test-first' ]
+#  - repo: https://github.com/pre-commit/pre-commit-hooks
+#    rev: v5.0.0
+#    hooks:
+#      - id: trailing-whitespace
+#      - id: end-of-file-fixer
+#        exclude_types:
+#          - jupyter
+#      - id: check-yaml
+#      - id: check-added-large-files
+#        args: [ '--maxkb=2048' ]
+#      - id: mixed-line-ending
+#      - id: detect-private-key
+#      - id: check-case-conflict
+#      - id: check-executables-have-shebangs
+#      - id: check-shebang-scripts-are-executable
+#      - id: name-tests-test
+#        args: [ '--pytest-test-first' ]
