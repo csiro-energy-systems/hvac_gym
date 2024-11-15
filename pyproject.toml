@@ -31,7 +31,7 @@ overrides = "^7.7.0"
 pendulum = "^3.0.0"
 
 dch-interface = { path = "lib/dch_interface-0.1.14-py3-none-any.whl", optional = true }
-senaps_api_client = { path = "lib/senaps_api_client-2.16.1a0-py3-none-any.whl", optional = true }
+senaps-api-client = { path = "lib/senaps_api_client-2.16.1a0-py3-none-any.whl", optional = true }
 pythermalcomfort = "^2.10.0"
 simple-pid = "^2.0.1"
 
