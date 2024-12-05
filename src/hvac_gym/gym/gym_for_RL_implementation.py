@@ -29,7 +29,7 @@ pd.set_option("display.max_rows", 15, "display.max_columns", 20, "display.width"
 global_heating_usage = 0
 last_ahu_chw_valve_sp = 0
 last_ahu_sa_fan_speed = 0
-
+real_thermal_discomfort_kpi, real_energy_usage_kpi, real_cost_kpi = 0, 0, 0
 
 class HVACGym(Env[DataFrame, DataFrame]):
     """Gym environment for simulating a HVAC system."""
@@ -99,12 +99,18 @@ class HVACGym(Env[DataFrame, DataFrame]):
         global thermal_discomfort_kpi
         global energy_usage_kpi
         global cost_kpi
+
+        global real_thermal_discomfort_kpi
+        global real_energy_usage_kpi
+        global real_cost_kpi
+
         if (reset_para == 0) or (new_parameter == True):
             self.index = self.start_index
             initial_observation = np.zeros(self.amount_of_observations)
             self.state = initial_observation  # Box(low=-1000, high=10000, shape=(len(self.all_inputs),))
             reset_para = 1
             thermal_discomfort_kpi, energy_usage_kpi, cost_kpi = 0,0,0
+            real_thermal_discomfort_kpi, real_energy_usage_kpi, real_cost_kpi = 0, 0, 0
             return np.array(initial_observation), 0
         else:
             reset_para = 1
@@ -159,7 +165,7 @@ class HVACGym(Env[DataFrame, DataFrame]):
                 # Add the 'od' column with default value 0
                 action["ahu_oa_damper"] = 0
                 action["ahu_hw_valve_sp"] = 0
-                action["ahu_sa_fan_speed"] = 100
+                action["ahu_sa_fan_speed"] = 0
             # set actions here, if applicable to this model
 
             # set actions here, if applicable to this model
@@ -187,9 +193,13 @@ class HVACGym(Env[DataFrame, DataFrame]):
         ahu_chw_valve_sp = max(action["ahu_chw_valve_sp"].to_numpy()[0], 0)
         ahu_hw_valve_sp = max(action["ahu_hw_valve_sp"].to_numpy()[0], 0)
         ahu_sa_fan_speed = max(action["ahu_sa_fan_speed"].to_numpy()[0], 0)
+        ahu_oa_damper = max(action["ahu_oa_damper"].to_numpy()[0], 0)
         outdoor_temp = self.state[str(oa_temp)]
         indoor_temp = self.state[str(zone_temp)]
         current_hour = current_time.hour
+        real_indoor_temp = self.state['zone_temp_actual']
+        real_cooling_usage = self.state['chiller_elec_power_actual']
+
         self.state = sim_df.loc[current_time]
         self.state["hour"] = current_hour
         cooling_usage = max(self.state["chiller_elec_power"], 0)
@@ -217,17 +227,31 @@ class HVACGym(Env[DataFrame, DataFrame]):
         global thermal_discomfort_kpi
         global energy_usage_kpi
         global cost_kpi
-        current_thermal_discomfort_kpi = calculate_thermal_discomfort_kpi(indoor_temp, up_boundary, low_boundary,
-                                                                          thermal_discomfort_kpi)
+        global real_thermal_discomfort_kpi
+        global real_energy_usage_kpi
+        global real_cost_kpi
+        current_thermal_discomfort_kpi = calculate_thermal_discomfort_kpi(indoor_temp, up_boundary, low_boundary, thermal_discomfort_kpi)
         current_energy_usage_kpi = calculate_energy_kpi(cooling_usage, 0, energy_usage_kpi) # heat =0 for Newcastle
         current_cost_kpi = calculate_cost_kpi(cooling_usage, 0, cost_kpi, price)# heat =0 for Newcastle
+
+        real_current_thermal_discomfort_kpi = calculate_thermal_discomfort_kpi(real_indoor_temp, up_boundary, low_boundary, real_thermal_discomfort_kpi)
+        real_current_energy_usage_kpi = calculate_energy_kpi(real_cooling_usage, 0, real_energy_usage_kpi)  # heat =0 for Newcastle
+        real_current_cost_kpi = calculate_cost_kpi(real_cooling_usage, 0, real_cost_kpi, price)  # heat =0 for Newcastle
+
+
         thermal_discomfort_kpi = current_thermal_discomfort_kpi
         energy_usage_kpi = current_energy_usage_kpi
         cost_kpi = current_cost_kpi
+
+        real_thermal_discomfort_kpi = real_current_thermal_discomfort_kpi
+        real_energy_usage_kpi = real_current_energy_usage_kpi
+        real_cost_kpi = real_current_cost_kpi
         global initial
         global result_learning
         result_sting = (
                 str(indoor_temp)
+                + ","
+                +str(real_indoor_temp)
                 + ","
                 + str(low_boundary)
                 + ","
@@ -247,17 +271,19 @@ class HVACGym(Env[DataFrame, DataFrame]):
                 + ","
                 + str(ahu_chw_valve_sp)
                 + ","
-                + str(ahu_hw_valve_sp)
-                + ","
-                + str(0)
-                + ","
                 + str(current_hour)
                 + ","
                 + str(cooling_usage)
                 + ","
-                + str("heating_usage")
+                + str(real_cooling_usage)
                 + ","
                 + str(price)
+                + ","
+                + str(real_current_thermal_discomfort_kpi)
+                + ","
+                + str(real_current_energy_usage_kpi)
+                + ","
+                + str(real_current_cost_kpi)
                 + ","
                 + str(current_thermal_discomfort_kpi)
                 + ","
@@ -274,7 +300,7 @@ class HVACGym(Env[DataFrame, DataFrame]):
             current_time = now.strftime("%dth-%b-%H-%M")
             result_learning = "C:\\Users\\wan397\\OneDrive - CSIRO\\Desktop\\RL_WORK_SUMMARY\\CSIRO_Newcastle_gym_process_data_" + current_time + "_.csv"
             f_1 = open(result_learning, "w+")
-            record = "indoor_temp,boundary_0,boundary_1,reward,thermal_reward,energy_reward,ref,weight_T,outdoor air,ahu_chw_valve_sp,ahu_hw_valve_sp,ahu_oa_damper,hour,cooling_usage,heating_usage,price,thermal_kpi,energy_kpi,cost_kpi,scenario\n"
+            record = "indoor_temp,real_indoor, boundary_0,boundary_1,reward,thermal_reward,energy_reward,ref,weight_T,outdoor air,ahu_chw_valve_sp,hour,cooling_usage,real_cooling_usage,price,real_thermal_kpi,real_energy_kpi,real_cost_kpi,thermal_kpi,energy_kpi,cost_kpi,scenario\n"
             f_1.write(record)
             f_1.close()
             initial = 1
