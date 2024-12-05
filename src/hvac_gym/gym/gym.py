@@ -1,16 +1,30 @@
+<<<<<<< HEAD
 # The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2024.
 
 import pickle
 from datetime import datetime, timedelta
 from typing import Any, Callable, SupportsFloat
+=======
+import pickle
+from datetime import datetime, timedelta
+from typing import Any, SupportsFloat
+>>>>>>> temp-branch
 
 import pandas as pd
 import plotly.graph_objects as go
 from gymnasium import Env
+<<<<<<< HEAD
 from gymnasium.spaces import Box
 from loguru import logger
 from overrides import overrides
 from pandas import DataFrame, Series
+=======
+from gymnasium.core import ObsType
+from gymnasium.spaces import Box
+from loguru import logger
+from overrides import overrides
+from pandas import DataFrame
+>>>>>>> temp-branch
 from plotly.graph_objs import Figure
 from plotly.subplots import make_subplots
 from sklearn.base import RegressorMixin
@@ -18,7 +32,10 @@ from tqdm import tqdm
 
 from hvac_gym.gym.hvac_agents import HVACAgent
 from hvac_gym.sites.model_config import HVACModelConf, HVACSiteConf
+<<<<<<< HEAD
 from hvac_gym.utils.data_utils import unique
+=======
+>>>>>>> temp-branch
 from hvac_gym.vis.vis_tools import figs_to_html
 
 pd.set_option("display.max_rows", 15, "display.max_columns", 20, "display.width", 300, "display.precision", 3)
@@ -29,6 +46,7 @@ class HVACGym(Env[DataFrame, DataFrame]):
 
     state: DataFrame
 
+<<<<<<< HEAD
     def __init__(self, site_config: HVACSiteConf, reward_function: Callable[[Series], float], sim_start_date: datetime | None = None) -> None:
         """Initializes the environment with the given configuration.
         :param site_config: The configuration of the HVAC system
@@ -39,6 +57,14 @@ class HVACGym(Env[DataFrame, DataFrame]):
         self.title: str = "HVAC Gym"
         self.site_config = site_config
         self.reward_function = reward_function
+=======
+    def __init__(self, site_config: HVACSiteConf, sim_start_date: datetime | None = None) -> None:
+        """Initializes the environment with the given configuration.
+        :param site_config: The configuration of the HVAC system
+        :param sim_start_date: The start date for the simulation, or None to just start from the beginning of the dataset
+        """
+        self.site_config = site_config
+>>>>>>> temp-branch
         setpoints = site_config.setpoints
 
         site = site_config.site
@@ -61,7 +87,11 @@ class HVACGym(Env[DataFrame, DataFrame]):
         self.actuals_df = self.sim_df.copy()
 
         inputs = [model_conf.inputs for model_conf in site_config.ahu_models]
+<<<<<<< HEAD
         self.all_inputs = list(unique([item for sublist in inputs for item in sublist]))
+=======
+        self.all_inputs = list(pd.unique([item for sublist in inputs for item in sublist]))
+>>>>>>> temp-branch
 
         self.setpoints = site_config.setpoints
 
@@ -81,7 +111,11 @@ class HVACGym(Env[DataFrame, DataFrame]):
         *,
         seed: int | None = None,
         options: dict[str, Any] | None = None,
+<<<<<<< HEAD
     ) -> tuple[Any, dict[str, Any]]:
+=======
+    ) -> tuple[ObsType, dict[str, Any]]:
+>>>>>>> temp-branch
         """Resets the environment to its initial state.
 
         Returns:
@@ -98,7 +132,11 @@ class HVACGym(Env[DataFrame, DataFrame]):
         return self.state, {}
 
     @overrides
+<<<<<<< HEAD
     def step(self, action: DataFrame) -> tuple[Any, SupportsFloat, bool, bool, dict[str, Any]]:
+=======
+    def step(self, action: DataFrame) -> tuple[ObsType, SupportsFloat, bool, dict[Any, Any]]:
+>>>>>>> temp-branch
         """Takes a step in the environment with the given action.
         Returns:
             observation (ObsType): An element of the environment's :attr:`observation_space` as the next observation due to the agent actions.
@@ -107,10 +145,13 @@ class HVACGym(Env[DataFrame, DataFrame]):
             terminated (bool): Whether the agent reaches the terminal state (as defined under the MDP of the task)
                 which can be positive or negative. An example is reaching the goal state or moving into the lava from
                 the Sutton and Barton, Gridworld. If true, the user needs to call :meth:`reset`.
+<<<<<<< HEAD
             truncated (bool): Whether the truncation condition outside the scope of the MDP is satisfied.
                 Typically, this is a timelimit, but could also be used to indicate an agent physically going out of bounds.
                 Can be used to end the episode prematurely before a terminal state is reached.
                 If true, the user needs to call :meth:`reset`.
+=======
+>>>>>>> temp-branch
             info (dict): Contains auxiliary diagnostic information (helpful for debugging, learning, and logging).
                 This might, for instance, contain: metrics that describe the agent's performance state, variables that are
                 hidden from observations, or individual reward terms that are combined to produce the total reward.
@@ -123,11 +164,14 @@ class HVACGym(Env[DataFrame, DataFrame]):
         current_time = sim_df.index[idx]
         self.index += 1
 
+<<<<<<< HEAD
         if self.index > len(sim_df) - 1:
             raise ValueError(
                 f"Reached end of simulation data at index {self.index}, timestamp: {current_time}. Please reset() the gym before calling step()."
             )
 
+=======
+>>>>>>> temp-branch
         # suppress settingswithcopy warning
         pd.options.mode.chained_assignment = None
 
@@ -157,6 +201,7 @@ class HVACGym(Env[DataFrame, DataFrame]):
             prediction = model.predict(predict_df)
             sim_df.loc[predict_time, str(output)] = prediction
 
+<<<<<<< HEAD
         self.state = sim_df.loc[current_time]
         obs = self.state
         reward = self.reward_function(self.state)
@@ -164,6 +209,14 @@ class HVACGym(Env[DataFrame, DataFrame]):
         info: dict[str, Any] = {}
         truncated = False
         return obs, reward, terminated, truncated, info
+=======
+        self.state = action
+        obs = self.state
+        reward = 0.0
+        terminated: bool = False
+        info: dict[Any, Any] = {}
+        return obs, reward, terminated, info
+>>>>>>> temp-branch
 
     @overrides
     def render(self, mode: str = "human") -> list[Figure]:
@@ -171,13 +224,20 @@ class HVACGym(Env[DataFrame, DataFrame]):
         sim_df = self.sim_df
         idx = self.index
         time = sim_df.index[idx]
+<<<<<<< HEAD
         inputs_no_lags = unique(self.all_inputs + self.setpoints)
 
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.1, subplot_titles=("Actual Data", "Simulated Data"))
+=======
+        inputs_no_lags = pd.unique(self.all_inputs + self.setpoints)
+
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.1, subplot_titles=("Simulated Data", "Actual Data"))
+>>>>>>> temp-branch
 
         # plot the simulation results
         title = f"Simulation results for {self.site_config.site}"
         targets = [str(m.target) for m in self.site_config.ahu_models]
+<<<<<<< HEAD
         targets_and_inputs = [c for c in list(unique(targets + [str(i) for i in inputs_no_lags])) if c in sim_df.columns]
 
         # plot the actuals for comparison
@@ -189,6 +249,16 @@ class HVACGym(Env[DataFrame, DataFrame]):
         p_sim = sim_df[targets_and_inputs].query(f"'{self.sim_start_date}'<index and index<'{time}'").sort_index()
         for col in p_sim.columns:
             fig.add_trace(go.Scatter(x=p_sim.index, y=p_sim[col], name=col, mode="lines", opacity=0.8), row=2, col=1)
+=======
+        p_sim = sim_df[list(set(targets + [str(i) for i in inputs_no_lags]))].query(f"'{self.sim_start_date}'<index and index<'{time}'").sort_index()
+        for col in p_sim.columns:
+            fig.add_trace(go.Scatter(x=p_sim.index, y=p_sim[col], name=col, mode="lines", opacity=0.8), row=1, col=1)
+
+        # also plot the actuals for comparison
+        p_actuals = self.actuals_df.query(f"'{self.sim_start_date}'<index and index<'{time}'").sort_index()
+        for col in p_actuals.columns:
+            fig.add_trace(go.Scatter(x=p_actuals.index, y=p_actuals[col], name=col, mode="lines", opacity=0.8), row=2, col=1)
+>>>>>>> temp-branch
 
         # separate legends for each subplot (see https://community.plotly.com/t/plotly-subplots-with-individual-legends/1754/25)
         for i, yaxis in enumerate(fig.select_yaxes(), 1):
@@ -225,35 +295,53 @@ class HVACGym(Env[DataFrame, DataFrame]):
 
 
 def run_gym_with_agent(
+<<<<<<< HEAD
     env: HVACGym, agent: HVACAgent, site_config: HVACSiteConf, max_steps: int | None = None, show_plot: bool = False
 ) -> tuple[list[Any], list[SupportsFloat]]:
+=======
+    env: Env[DataFrame, DataFrame], agent: HVACAgent, site_config: HVACSiteConf, max_steps: int | None = None, show_plot: bool = False
+) -> None:
+>>>>>>> temp-branch
     """Convenience method that runs a simulation of the gym environment with the specified agent
     :param env: The gym environment to simulate
     :param agent: The HVACAgent insstance to use in the simulation
     :param max_steps: The maximum number of steps to simulate
     :param show_plot: Whether to show a plot of the results
     :param conf: The configuration of the gym environment
+<<<<<<< HEAD
     :return: A tuple of the observations and rewards from the simulation
     """
     env.reset()
     last_observation = env.sim_df.loc[env.sim_df.index[0]]
+=======
+    """
+    env.reset()
+    last_observation = None
+>>>>>>> temp-branch
 
     if max_steps is None:
         max_steps = len(env.sim_df)
 
+<<<<<<< HEAD
     rewards = []
     observations = []
+=======
+>>>>>>> temp-branch
     step = 0
     for step in tqdm(range(max_steps), f"Running gym simulation with agent: {agent.name}"):
         try:
             env.title = agent.name
             t0 = datetime.now()
             action = agent.act(last_observation, step)
+<<<<<<< HEAD
             observation, reward, done, trunc, infos = env.step(action)
 
             observations.append(observation)
             rewards.append(reward)
 
+=======
+            observation, reward, done, infos = env.step(action)
+>>>>>>> temp-branch
             last_observation = observation
             logger.trace(f"Step {step} of {max_steps} done in {datetime.now() - t0}, observation: \n{observation}")
 
@@ -261,6 +349,7 @@ def run_gym_with_agent(
             if show_plot and (step % 6 == 0 or step == max_steps - 1):
                 env.render()
 
+<<<<<<< HEAD
             if done:
                 logger.info(f"Reached end of simulation data at index {step}, timestamp: {env.sim_df.index[step]}.")
                 break
@@ -269,14 +358,26 @@ def run_gym_with_agent(
             raise
 
     logger.info(f"Ended after {step+1} steps.")
+=======
+        except KeyboardInterrupt:
+            raise
+
+    logger.info(f"Ended after {step} steps.")
+>>>>>>> temp-branch
 
     """ Always save the final plot to static html for reference """
     final_figs = env.render()
     title = f"Simulation results for {site_config.site}"
+<<<<<<< HEAD
     figs_to_html(final_figs, f"output/{title}", show=show_plot)
 
     env.close()
     return observations, rewards
+=======
+    figs_to_html(final_figs, f"output/{title}", show=True)
+
+    env.close()
+>>>>>>> temp-branch
 
 
 if __name__ == "__main__":

@@ -186,4 +186,7 @@ output/
 *.json
 .func_cache
 !output/.gitkeep
+<<<<<<< HEAD
 temp/
+=======
+>>>>>>> temp-branch

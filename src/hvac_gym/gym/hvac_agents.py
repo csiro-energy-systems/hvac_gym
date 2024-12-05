@@ -1,5 +1,8 @@
+<<<<<<< HEAD
 # The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2024.
 
+=======
+>>>>>>> temp-branch
 from abc import ABC, abstractmethod
 
 from dch.paths.sem_paths import (
@@ -41,7 +44,11 @@ class MinMaxCoolAgent(HVACAgent):
                 str(ahu_chw_valve_sp): 0,
                 str(ahu_hw_valve_sp): 0,
                 str(ahu_oa_damper): 0,
+<<<<<<< HEAD
                 str(ahu_sa_fan_speed): 50,
+=======
+                str(ahu_sa_fan_speed): 0,
+>>>>>>> temp-branch
             },
             index=[0],
         )
@@ -51,9 +58,17 @@ class MinMaxCoolAgent(HVACAgent):
         """Returns the action for the given observation and step."""
         if step % self.cycle_steps < self.cycle_steps / 2:
             # max cooling
+<<<<<<< HEAD
             self.df_schema[str(ahu_chw_valve_sp)] = 0
             return self.df_schema
         else:
             # no cooling
             self.df_schema[str(ahu_chw_valve_sp)] = self.cool_chwv_setpoint
+=======
+            self.df_schema[str(ahu_chw_valve_sp)] = self.cool_chwv_setpoint
+            return self.df_schema
+        else:
+            # no cooling
+            self.df_schema[str(ahu_chw_valve_sp)] = 0
+>>>>>>> temp-branch
             return self.df_schema

@@ -1,9 +1,15 @@
+<<<<<<< HEAD
 # The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2024.
 
 import pickle
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
+=======
+import pickle
+from datetime import datetime, timedelta
+from pathlib import Path
+>>>>>>> temp-branch
 
 import numpy as np
 import pandas as pd
@@ -37,7 +43,11 @@ pio.templates.default = "plotly_dark"
 logger = get_logger()
 cd_project_root()
 
+<<<<<<< HEAD
 draw_plots = True  # enables/disables plotting during training
+=======
+draw_plots = False  # enables/disables plotting during training
+>>>>>>> temp-branch
 show_plots = False  # enables/disables opening plots when draw_plots==True
 
 pd.options.mode.chained_assignment = None
@@ -105,8 +115,15 @@ class TrainSite:
         site_conf: HVACSiteConf,
         model_conf: HVACModelConf,
         streams: dict[str, DataFrame],
+<<<<<<< HEAD
     ) -> tuple[DataFrame, dict[str, Any]]:
         """Preprocesses the training data for each AHU and model"""
+=======
+    ) -> DataFrame:
+        """Preprocesses the training data for each AHU and model
+        :param streams:
+        """
+>>>>>>> temp-branch
         target = data_set.target
         inputs = data_set.inputs
 
@@ -145,12 +162,20 @@ class TrainSite:
                 lagged_cols.append(lag_col)
 
         # add metadata to the dataframe
+<<<<<<< HEAD
         df_attrs: dict[str, Any] = dict()
         df_attrs["lagged_cols"] = lagged_cols
         df_attrs["input_cols"] = input_cols
         df_attrs["target_col"] = target_col
         df_attrs["sample_rate_mins"] = target.sample_rate
         df_attrs["streams"] = streams
+=======
+        building_df.attrs["lagged_cols"] = lagged_cols
+        building_df.attrs["input_cols"] = input_cols
+        building_df.attrs["target_col"] = target_col
+        building_df.attrs["sample_rate_mins"] = target.sample_rate
+        building_df.attrs["streams"] = streams
+>>>>>>> temp-branch
 
         # shift (non-target) inputs down by the horizon so they are used to forecast future targets
         horizon_mins = model_conf.horizon_mins
@@ -158,12 +183,17 @@ class TrainSite:
         input_cols = [c for c in building_df.columns if c != target_col]
         building_df[input_cols] = building_df[input_cols].shift(horizon_rows)
 
+<<<<<<< HEAD
         return building_df, df_attrs
+=======
+        return building_df
+>>>>>>> temp-branch
 
     def run(self, site_config: HVACSiteConf, start: datetime, end: datetime) -> None:
         """Main entrypoint to acquire data, train models and run gym-like simulation for a site"""
         models: dict[HVACModelConf, RegressorMixin] = {}
         model_dfs = []
+<<<<<<< HEAD
         model_df_attrs = []
         predictions: list[Series] = []
 
@@ -172,12 +202,18 @@ class TrainSite:
         # First pass: get all the data and metadata for all models, and store back in the configs
         for model_conf in site_config.ahu_models:
             logger.info(f"Training model {model_conf.output} model for {site_config.site}")
+=======
+        predictions: list[Series] = []
+        for model_conf in site_config.ahu_models:
+            logger.info(f"Training model {model_conf.target} model for {site_config.site}")
+>>>>>>> temp-branch
             building = site_config.site
 
             # Gather and preprocess data
             streams = self.check_streams(model_conf, building)
             streams = self.validate_streams(streams)
             data = get_data(streams, building, start, end)
+<<<<<<< HEAD
             building_df, df_attrs = self.preprocess_data(data, site_config, model_conf, streams)
 
             model_conf.dataframe = building_df
@@ -196,14 +232,25 @@ class TrainSite:
 
             # Train and test models
             model, preds = train_site_model(building_df, df_attrs, site_config.site, model_conf, predictions)
+=======
+            building_df = self.preprocess_data(data, site_config, model_conf, streams)
+
+            # Train and test models
+            model, preds = train_site_model(building_df, site_config.site, model_conf, predictions)
+>>>>>>> temp-branch
             predictions.append(preds)
             models[model_conf] = model
 
             # Save the preprocessed DF from each model.  Inputs are shifted so ready for prediction.
             model_dfs.append(building_df)
+<<<<<<< HEAD
             model_df_attrs.append(df_attrs)
 
         sim_df = self.save_models_and_data(models, model_dfs, model_df_attrs, site_config)
+=======
+
+        sim_df = self.save_models_and_data(models, model_dfs, site_config)
+>>>>>>> temp-branch
 
         # Step the models through a simulation period. Predict with each in the specified order then update the dataframe with predictions
         self.simulate(sim_df, models, site_config, sim_steps=200)
@@ -212,6 +259,7 @@ class TrainSite:
         # import cProfile
         # cProfile.runctx('self.simulate(sim_df, models, site_config)', globals(), locals(), filename='simulate.prof')
 
+<<<<<<< HEAD
     def simulate(
         self,
         sim_df: DataFrame,
@@ -219,6 +267,9 @@ class TrainSite:
         site_config: HVACSiteConf,
         sim_steps: int = 500,
     ) -> None:
+=======
+    def simulate(self, sim_df: DataFrame, models: dict[HVACModelConf, RegressorMixin], site_config: HVACSiteConf, sim_steps: int = 500) -> None:
+>>>>>>> temp-branch
         """
         Simple gym-like simulation with the models and combined dataframe. Mainly used for manual verification that trained models interact and
         respond to actions as expected.
@@ -237,7 +288,11 @@ class TrainSite:
                 output = model_conf.output
                 model_df = sim_df[inputs]
 
+<<<<<<< HEAD
                 inputs_no_lags = [str(i) for i in model_conf.derived_inputs] + [str(i) for i in model_conf.inputs]
+=======
+                inputs_no_lags = model.attrs["input_cols"] + [str(i) for i in model_conf.derived_inputs]
+>>>>>>> temp-branch
                 all_inputs_no_lags.extend(inputs_no_lags)
 
                 # set chilled water valve to square wave, cycling every N steps
@@ -291,7 +346,11 @@ class TrainSite:
         append_ahu_name(target_streams)
         if "ahu_name" in target_streams.columns:
             target_ahus = set(target_streams["ahu_name"].to_list())
+<<<<<<< HEAD
             logger.trace(f"Found target AHUs: {target_ahus}")
+=======
+            logger.info(f"Found target AHUs: {target_ahus}")
+>>>>>>> temp-branch
 
         # Get list of AHUs that the input streams apply to, if any
         for point in input_streams.keys():
@@ -309,9 +368,13 @@ class TrainSite:
 
         return streams
 
+<<<<<<< HEAD
     def save_models_and_data(
         self, models: dict[HVACModelConf, RegressorMixin], model_dfs: list[DataFrame], df_attrs: list[dict[str, Any]], site_config: HVACSiteConf
     ) -> DataFrame:
+=======
+    def save_models_and_data(self, models: dict[HVACModelConf, RegressorMixin], model_dfs: list[DataFrame], site_config: HVACSiteConf) -> DataFrame:
+>>>>>>> temp-branch
         """
         Combines dataframes from all models into a single DF that can be used for simulation, and saves it and the models to disk.
         :param models: the trained models
@@ -321,6 +384,7 @@ class TrainSite:
         """
         # save models to disk
         for model_conf, model in models.items():
+<<<<<<< HEAD
             model_file = Path(f"{site_config.out_dir}/{site_config.site}_{model_conf.output}_model.pkl")
             model_file.parent.mkdir(parents=True, exist_ok=True)
             with open(model_file, "wb") as f:
@@ -330,6 +394,15 @@ class TrainSite:
         sim_df = pd.concat(model_dfs, axis="columns")
 
         # Make targets the first columns
+=======
+            with open(f"{site_config.out_dir}/{site_config.site}_{model_conf.output}_model.pkl", "wb") as f:
+                pickle.dump(model, f)
+
+        # combine DFs from all models
+        sim_df = pd.concat(model_dfs, axis="columns")
+
+        # make targets the first columns
+>>>>>>> temp-branch
         sim_df = sim_df[
             sorted(
                 sim_df.columns,
@@ -348,10 +421,15 @@ class TrainSite:
         actuals.columns = [f"{c}_actual" for c in actuals.columns]
         sim_df = actuals.join(sim_df)  # add actuals for debugging
         sim_df = sim_df.loc[:, ~sim_df.columns.duplicated()]
+<<<<<<< HEAD
         sim_df = sim_df.dropna(how="any")
 
         sim_df.to_parquet(f"output/{site_config.site}_sim_df.parquet")
 
+=======
+
+        sim_df.to_parquet(f"output/{site_config.site}_sim_df.parquet")
+>>>>>>> temp-branch
         return sim_df
 
 
@@ -384,7 +462,11 @@ def get_data(
 ) -> TrainingSet:
     """
     Gets a dictionary of dataframes for the target and input streams
+<<<<<<< HEAD
 
+=======
+    Each
+>>>>>>> temp-branch
     :param streams: dictionary of target and input streams to get data for
     :param building: the building to get data for
     :param start: data start date
@@ -443,7 +525,10 @@ def get_data(
 # @memory.cache()
 def train_site_model(
     train_test_df: DataFrame,
+<<<<<<< HEAD
     df_attrs: dict[str, Any],
+=======
+>>>>>>> temp-branch
     site: DCHBuilding,
     model_conf: HVACModelConf,
     predictions: list[Series],
@@ -457,6 +542,7 @@ def train_site_model(
     :param site:
     :param model_conf:
     :param predictions: accumulated predictions from prior models.
+<<<<<<< HEAD
     :return: the trained model
     """
     target_cols = [model_conf.target.name]
@@ -465,6 +551,18 @@ def train_site_model(
     sample_rate_mins = df_attrs["sample_rate_mins"]
 
     train_test_df = train_test_df.resample(f"{sample_rate_mins}min").median().copy()
+=======
+    :return:
+    """
+    target_cols = [model_conf.target.name]
+    _input_cols = train_test_df.attrs["input_cols"]
+    lagged_cols = train_test_df.attrs["lagged_cols"]
+    _sample_rate = train_test_df.attrs["sample_rate_mins"]
+    _target_col = train_test_df.attrs["target_col"]
+    _target_streams = train_test_df.attrs["streams"]["target_streams"]
+
+    train_test_df = train_test_df.resample(f"{_sample_rate}min").median().copy()
+>>>>>>> temp-branch
 
     # add any derived inputs produced by previous training runs
     if model_conf.derived_inputs:
@@ -525,19 +623,58 @@ def train_site_model(
     logger.info(f"Model: {model}")
 
     # shift input cols back up (shifted down in preprocessing) by the horizon so the plots are aligned
+<<<<<<< HEAD
+=======
+    sample_rate_mins = train_test_df.attrs["sample_rate_mins"]
+>>>>>>> temp-branch
     horizon_rows = int(model_conf.horizon_mins / sample_rate_mins)
     input_cols = [c for c in train_test_df.columns if c not in target_cols]
     train_test_df[input_cols] = train_test_df[input_cols].shift(-horizon_rows)
 
+<<<<<<< HEAD
+=======
+    # TODO drop unused modelling code:
+    # if isinstance(model, PySRRegressor):
+    #     logger.info(f"Symbolic regression models: {model.equations_}")
+    # if isinstance(model, TPOTRegressor):
+    #     with pd.option_context(
+    #         "display.max_rows",
+    #         None,
+    #         "display.max_columns",
+    #         None,
+    #         "display.width",
+    #         400,
+    #         "display.max_colwidth",
+    #         50,
+    #     ):
+    #         logger.info(f"Best TPOT models: \n{model.pareto_front}")
+    #         model.pareto_front.to_csv(f"output/{target_cols[0]}_{site}_tpot_pareto_front.csv")
+    #         pipeline: Pipeline = model.fitted_pipeline_
+    #         with open(f"output/{target_cols[0]}_{site}_tpot_pipeline.pkl", "wb") as f:
+    #             pickle.dump(pipeline, f)
+    #
+    #         # print all hyperparameters
+    #         for n in model.fitted_pipeline_.graph.nodes:
+    #             print(n, " : ", model.fitted_pipeline_.graph.nodes[n]["instance"])
+
+>>>>>>> temp-branch
     if isinstance(model, LinearModel):
         features = dict(zip(np.round(model.coef_, 4), model.feature_names_in_))
         features = dict(sorted(features.items(), reverse=True))
         coeff_str = [f"{k}: {v}" for k, v in features.items()]
+<<<<<<< HEAD
         logger.info("Model coefficients: \n" + "\n".join(coeff_str))
 
     if draw_plots:
         # add predictions to the original df
         title = f"Train and Test Predictions - target={output_col}, site={site}, model={type(model).__name__} - R2={r2:.3f}, RMSE={rmse:.3f}"
+=======
+        logger.info(f"Model coefficients: \n{'\n'.join(coeff_str)}")
+
+    if draw_plots:
+        # add predictions to the original df
+        title = f"Train and Test Predictions - target={target_cols[0]}, site={site}, model={type(model).__name__} - R2={r2:.3f}, RMSE={rmse:.3f}"
+>>>>>>> temp-branch
         train_test_df[f"{target_cols[0]}_test_pred"] = test_pred.copy()
         train_test_df[f"{target_cols[0]}_train_pred"] = train_pred.copy()
         fig1 = plot_df(
@@ -546,8 +683,13 @@ def train_site_model(
         )
 
         # scatterplot of test_pred vs target values
+<<<<<<< HEAD
         title = f"Predictions vs Actuals - target={output_col}, site={site}, model={type(model).__name__}"
         fig2 = px.scatter(x=test_y[target_cols[0]], y=test_pred, title=title)
+=======
+        title = f"Predictions vs Actuals - target={target_cols[0]}, site={site}, model={type(model).__name__}"
+        fig2 = px.scatter(x=test_y[target_cols[0]], y=test_pred.ravel(), title=title)
+>>>>>>> temp-branch
         fig2.update_layout(xaxis_title="Actual", yaxis_title="Predicted")
         fig2.data[0].name = "test"
         fig2.add_scatter(
@@ -563,13 +705,32 @@ def train_site_model(
             show=show_plots,
         )
 
+<<<<<<< HEAD
+=======
+    # copy all attrs from the original df to the model
+    model.attrs = train_test_df.attrs
+
+>>>>>>> temp-branch
     return model, unfilt_pred
 
 
 if __name__ == "__main__":
+<<<<<<< HEAD
     # fixed dates will reuse data caching
     start_date = datetime(2023, 10, 7)
     end_date = datetime(2024, 8, 14)
 
     site = TrainSite()
     site.run(newcastle_config.model_conf, start_date, end_date)
+=======
+    # end_date = datetime.now()
+    # start_date = end_date - timedelta(days=200)
+
+    # fixed dates will reuse data caching
+    start_date = datetime(2023, 10, 7)
+    end_date = datetime(2024, 4, 24)
+
+    site = TrainSite()
+    site.run(newcastle_config.model_conf, start_date, end_date)
+    # site.run(clayton_config.model_conf, start_date, end_date)
+>>>>>>> temp-branch

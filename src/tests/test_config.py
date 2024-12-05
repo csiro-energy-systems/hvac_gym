@@ -1,5 +1,8 @@
+<<<<<<< HEAD
 # The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2024.
 
+=======
+>>>>>>> temp-branch
 from pathlib import Path
 
 from dch.utils.init_utils import cd_project_root

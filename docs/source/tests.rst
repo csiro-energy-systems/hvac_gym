@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 tests package
 =============
 
@@ -35,3 +36,34 @@ Module contents
    :members:
    :undoc-members:
    :show-inheritance:
+=======
+tests package
+=============
+
+Submodules
+----------
+
+tests.test\_config module
+-------------------------
+
+.. automodule:: tests.test_config
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+tests.test\_gym module
+----------------------
+
+.. automodule:: tests.test_gym
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: tests
+   :members:
+   :undoc-members:
+   :show-inheritance:
+>>>>>>> temp-branch

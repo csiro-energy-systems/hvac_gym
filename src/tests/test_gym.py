@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2024.
 
 from pathlib import Path
@@ -9,17 +10,29 @@ from dch.paths.sem_paths import ahu_chw_valve_sp, ahu_hw_valve_sp, ahu_oa_damper
 from dch.utils.init_utils import cd_project_root
 from loguru import logger
 from pandas import DataFrame, Series
+=======
+from pathlib import Path
+
+import pytest
+from dch.paths.sem_paths import ahu_chw_valve_sp, ahu_hw_valve_sp, ahu_oa_damper, ahu_sa_fan_speed
+from dch.utils.init_utils import cd_project_root
+from pandas import DataFrame
+>>>>>>> temp-branch
 from pendulum import parse
 
 from hvac_gym.gym.gym import HVACGym, run_gym_with_agent
 from hvac_gym.gym.hvac_agents import MinMaxCoolAgent
 from hvac_gym.sites import newcastle_config
+<<<<<<< HEAD
 import zipfile
 import tempfile
+=======
+>>>>>>> temp-branch
 
 cd_project_root()
 Path("output").mkdir(exist_ok=True)
 
+<<<<<<< HEAD
 import plotly.io as pio
 
 pio.templates.default = "plotly_dark"
@@ -59,6 +72,17 @@ class TestGym:
 
         site_config = newcastle_config.model_conf
         env = HVACGym(site_config, reward_function=lambda x: 0.0)
+=======
+
+class TestGym:
+    @pytest.mark.integration
+    def test_gym_step(self) -> None:
+        """Tests a single step of teh gym environment"""
+        from hvac_gym.sites import newcastle_config
+
+        site_config = newcastle_config.model_conf
+        env = HVACGym(site_config)
+>>>>>>> temp-branch
         env.reset()
         action = DataFrame(
             {
@@ -79,7 +103,11 @@ class TestGym:
 
         site_config = newcastle_config.model_conf
 
+<<<<<<< HEAD
         env = HVACGym(site_config, reward_function=lambda x: 0.0)
+=======
+        env = HVACGym(site_config)
+>>>>>>> temp-branch
         agent = MinMaxCoolAgent(env, cycle_steps=100, cool_chwv_setpoint=100)
         run_gym_with_agent(env, agent, site_config, max_steps=10, show_plot=False)
 
@@ -87,6 +115,7 @@ class TestGym:
     @pytest.mark.integration
     def test_gym_simulate_long(self) -> None:
         """Tests a long simulation of the gym environment"""
+<<<<<<< HEAD
         max_steps = 500
         chwv_sp = 100
         valve_on_off_hours = 12
@@ -107,6 +136,15 @@ class TestGym:
 
         logger.info(f"Observations: \n{obs_df}")
         logger.info(f"Total reward was {sum(rewards):.1f}")  # type: ignore
+=======
+        max_steps = 1000
+        start = parse("2023-11-01", tz="Australia/Sydney")
+        site_config = newcastle_config.model_conf
+
+        env = HVACGym(site_config, sim_start_date=start)
+        agent = MinMaxCoolAgent(env, cycle_steps=100, cool_chwv_setpoint=100)
+        run_gym_with_agent(env, agent, site_config, max_steps=max_steps, show_plot=False)
+>>>>>>> temp-branch
 
 
 if __name__ == "__main__":

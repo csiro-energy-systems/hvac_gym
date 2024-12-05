@@ -1,5 +1,8 @@
+<<<<<<< HEAD
 # The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2024.
 
+=======
+>>>>>>> temp-branch
 from dch.dch_interface import DCHBuilding
 from dch.paths.sem_paths import (
     ahu_chw_valve_sp,
@@ -50,12 +53,20 @@ zone_temp_model = HVACModelConf(
 model_conf = HVACSiteConf(
     site=DCHBuilding("csiro", "clayton", "Building307", tz="Australia/Melbourne"),
     plot_data=False,
+<<<<<<< HEAD
+=======
+    sim_start_date=None,
+>>>>>>> temp-branch
     chiller_cop=2.0,
     resample_interval_mins=10,
     use_saved_models=False,
     refit_saved_models=False,
     save_refitted_models=True,
     tpot_max_time_mins=0,
+<<<<<<< HEAD
+=======
+    skopt_n_hyperparam_runs=0,
+>>>>>>> temp-branch
     setpoints=[
         ahu_chw_valve_sp,
         ahu_hw_valve_sp,
@@ -63,6 +74,10 @@ model_conf = HVACSiteConf(
         ahu_oa_damper,
     ],
     ahu_models=[sa_temp_model, zone_temp_model],
+<<<<<<< HEAD
+=======
+    power_models=[],
+>>>>>>> temp-branch
 )
 
 # power_models = {
