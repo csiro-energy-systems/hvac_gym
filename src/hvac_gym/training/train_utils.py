@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-# The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2024.
-
-=======
->>>>>>> temp-branch
 import warnings
 
 import optuna
@@ -14,10 +9,6 @@ from optuna import Trial
 from optuna.visualization import plot_optimization_history
 from skelm import ELMRegressor
 
-<<<<<<< HEAD
-from hvac_gym.utils.data_utils import unique
-=======
->>>>>>> temp-branch
 from hvac_gym.vis.vis_tools import figs_to_html
 
 
@@ -29,10 +20,7 @@ def split_alternate_days(df: pd.DataFrame, n_sets: int = 2) -> list[pd.DataFrame
     day, etc.
     :return: [train, test]
     """
-<<<<<<< HEAD
-=======
 
->>>>>>> temp-branch
     df["doy"] = [d.timetuple().tm_yday for d in df.index.date]
 
     sets = []
@@ -41,9 +29,6 @@ def split_alternate_days(df: pd.DataFrame, n_sets: int = 2) -> list[pd.DataFrame
 
     # no days from any set should be in any other set
     for s in range(0, n_sets - 1):
-<<<<<<< HEAD
-        assert len(set(unique(sets[s].index.date)).intersection(set(unique(sets[s + 1].index.date)))) == 0
-=======
         assert (
             len(
                 set(pd.unique(sets[s].index.date)).intersection(
@@ -52,20 +37,15 @@ def split_alternate_days(df: pd.DataFrame, n_sets: int = 2) -> list[pd.DataFrame
             )
             == 0
         )
->>>>>>> temp-branch
 
     df.drop(columns=["doy"], inplace=True)  # noqa
 
     return sets
 
 
-<<<<<<< HEAD
-def elm_optuna_param_search(x_train: pd.DataFrame, y_train: pd.DataFrame, n_trials: int = 100) -> tuple[ELMRegressor, Figure]:
-=======
 def elm_optuna_param_search(
     x_train: pd.DataFrame, y_train: pd.DataFrame, n_trials: int = 100
 ) -> tuple[ELMRegressor, Figure]:
->>>>>>> temp-branch
     """
     Performs an optuna search for the best hyperparameters for an ELMRegressor model, trying to maximise cross-validation score on the
     provided training set.
@@ -82,15 +62,6 @@ def elm_optuna_param_search(
             x, y = x_train, y_train
             classifier_obj = ELMRegressor(
                 n_neurons=trial.suggest_int("n_neurons", 10, 500, log=False),
-<<<<<<< HEAD
-                ufunc=trial.suggest_categorical("ufunc", ["tanh", "sigm", "relu", "lin"]),
-                alpha=trial.suggest_loguniform("alpha", 1e-7, 1e-1),
-                include_original_features=trial.suggest_categorical("include_original_features", [True, False]),
-                density=trial.suggest_float("density", 1e-3, 1, step=0.1),
-                pairwise_metric=trial.suggest_categorical("pairwise_metric", ["euclidean", "cityblock", "cosine", None]),
-            )
-            score = sklearn.model_selection.cross_val_score(classifier_obj, x, y, n_jobs=-1, cv=5)
-=======
                 ufunc=trial.suggest_categorical(
                     "ufunc", ["tanh", "sigm", "relu", "lin"]
                 ),
@@ -106,7 +77,6 @@ def elm_optuna_param_search(
             score = sklearn.model_selection.cross_val_score(
                 classifier_obj, x, y, n_jobs=-1, cv=5
             )
->>>>>>> temp-branch
             accuracy = float(score.mean())
         return accuracy
 

@@ -7,7 +7,7 @@ from dch.utils.init_utils import cd_project_root
 from pandas import DataFrame
 from pendulum import parse
 from pandas import DataFrame, Series
-from hvac_gym.gym.gym_for_RL_implementation import HVACGym, run_gym_with_agent  #Price ToU integarated
+from hvac_gym.gym.Gym_for_RL_implementation_continuous import HVACGym, run_gym_with_agent  #Price ToU integarated
 from hvac_gym.gym.performance_evaluation_metrics import calculate_thermal_discomfort_kpi,calculate_energy_kpi,_ToU_,calculate_cost_kpi
 from hvac_gym.gym.hvac_agents import MinMaxCoolAgent
 from hvac_gym.sites import newcastle_config
@@ -246,30 +246,31 @@ def the_one_under_test_outdoor (observations):
     return final_reward, thermal_reward, energy_reward, target,thermal_weight, scenario
 
 
+def reward_function (observations: Series) -> float:
+    # reward, thermal_reward, energy_reward, ref, weight_T, scenario = reward_function_flexibility(observations) # the_one_under_test_outdoor
+
+    reward, thermal_reward, energy_reward, ref, weight_T, scenario = the_one_under_test_outdoor(
+        observations)  # the_one_under_test_outdoor
+
+    return reward, thermal_reward, energy_reward, ref, weight_T, scenario
+
 class Rl_test:
     now = datetime.now()
     current_time = now.strftime("%dth-%b-%H-%M")
     print(current_time)
-    def test_gym_with_RL(self) -> None:
+    def train_gym_with_RL(self) -> None:
         time_interval = 10
         training_starts, training_days, episodes = training_setup()
         # testing_starts_1, testing_days_1,  testing_starts_2, testing_days_2, testing_starts_3, testing_days_3 = testing_setup()
 
         start = parse(training_starts).astimezone(pytz.timezone("Australia/Sydney"))
+        print(f"training starts on: {start}")
         training_steps = int((60 * 24 / time_interval) * training_days)
         site_config = newcastle_config.model_conf
 
-        def example_reward_func(observations: Series) -> float:
-
-            # reward, thermal_reward, energy_reward, ref, weight_T, scenario = reward_function_flexibility(observations) # the_one_under_test_outdoor
-
-            reward, thermal_reward, energy_reward, ref, weight_T, scenario = the_one_under_test_outdoor(observations)  # the_one_under_test_outdoor
-
-            return reward, thermal_reward, energy_reward, ref, weight_T, scenario
-
         _number_of_observations = 7
-        environment = HVACGym(site_config, reward_function=example_reward_func, sim_start_date=start, amount_of_observations=_number_of_observations)
-
+        environment = HVACGym(site_config, reward_function=reward_function, sim_start_date=start, amount_of_observations=_number_of_observations)
+        environment.reset(new_parameter=True, sim_start_date=start)
         environment = NormalizeObservation(environment)
         print("Action Space:", environment.action_space)
         print("Observation Space:", environment.observation_space)
@@ -277,44 +278,107 @@ class Rl_test:
         from stable_baselines3 import DQN, A2C, PPO, SAC
 
         TRAIN_NEW_AGENT = True  # False #True
-        MODEL_Name = "CSIRO_Newcastle_agent"
+        MODEL_Name = "RL_agent_"
         if TRAIN_NEW_AGENT == True:
             _ent_coef_ = "auto"
-            agent = SAC(
-                "MlpPolicy", environment, learning_rate=0.0001, batch_size=int(1 * (60 * 24 / time_interval)), ent_coef=_ent_coef_, gamma=0.9
-            )  # gamma=0.95
+            agent = SAC("MlpPolicy", environment, learning_rate=0.0001, batch_size=int(1 * (60 * 24 / time_interval)), ent_coef=_ent_coef_, gamma=0.9)
             for episode in range(episodes):
                 print("This is the {}th episode".format(episode))
                 environment.reset(new_parameter=True)
                 agent.learn(total_timesteps=training_steps, reset_num_timesteps=False)
-
-            # agent.learn(total_timesteps=training_steps)
             agent.save(MODEL_Name)
-            print("learning progress is completed, now testing is started.")
+            agent.save_replay_buffer('CSIRO_Newcastle_save_replay_buffer')
+            print("The Learning progress is completed.")
         else:
-            print("Launching the pre-trained agent for demo.")
-            agent = SAC.load(MODEL_Name)
-            print("Now testing is started.")
+            print("Please use the testing function to Launch the pre-trained agent.")
 
-        testing_starts_1, testing_days_1 = testing_setup()
-        start = parse(testing_starts_1).astimezone(pytz.timezone("Australia/Sydney"))
-        environment = HVACGym(site_config, reward_function=example_reward_func, sim_start_date=start,
-                      amount_of_observations=_number_of_observations)
+    def test_with_general_RL(self) -> None:
+        print("We first test general RL.")
+        time_interval = 10
+        testing_starts, testing_days = testing_setup()
+        # testing_starts = "2023-10-08 11:00:00+11:00"  # Must be within sim_df.index range
+
+        start = parse(testing_starts).astimezone(pytz.timezone("Australia/Sydney"))
+        print(f"Testing starts on: {start}")
+        site_config_T = newcastle_config.model_conf
+        _number_of_observations = 7
+        environment = HVACGym(site_config_T, reward_function=reward_function, sim_start_date=start, amount_of_observations=_number_of_observations)
+        environment.reset(new_parameter=True, sim_start_date=start)
         environment = NormalizeObservation(environment)
-        test_steps = int(60 * 24 / time_interval * testing_days_1)
+        from stable_baselines3 import DQN, A2C, PPO, SAC
+        MODEL_Name = "RL_agent_"
+        agent = SAC.load(MODEL_Name)
+        print("Agent loaded.")
+        agent.set_env(environment)
+        test_steps = int(60 * 24 / time_interval * testing_days)
         obs = np.zeros(_number_of_observations)
-        environment.reset(new_parameter=True)
+
         for step in range(test_steps):
             try:
-                print("now the current step is: ", step)
+                # print("now the current step is: ", step)
                 action, _ = agent.predict(obs, deterministic=True)  # c
                 observation, reward, done, result_sting, _ = environment.step(action)
                 obs = observation
 
             except KeyboardInterrupt:
                 raise
+    def test_with_continuous_RL(self) -> None:
+        print("We then test continuous RL.")
+        time_interval = 10
+        testing_starts, testing_days = testing_setup()
+        start = parse(testing_starts).astimezone(pytz.timezone("Australia/Sydney"))
+        site_config = newcastle_config.model_conf
+        _number_of_observations = 7
+        environment = HVACGym(site_config, reward_function=reward_function, sim_start_date=start, amount_of_observations=_number_of_observations)
+        environment.reset(new_parameter=True)
+        environment = NormalizeObservation(environment)
+        from stable_baselines3 import DQN, A2C, PPO, SAC
+        MODEL_Name = "RL_agent_"
+        agent = SAC.load(MODEL_Name)
+        print("Agent loaded.")
+        # Reinitialize logger
+        from stable_baselines3.common.logger import configure
+        new_logger = configure(folder="./logs", format_strings=["stdout", "csv", "tensorboard"])
+        agent._logger = new_logger
+
+        agent.set_env(environment)
+        test_steps = int(60 * 24 / time_interval * testing_days)
+        obs = np.zeros(_number_of_observations)
+
+        for step in range(test_steps):
+            try:
+                # print("now the current step is: ", step)
+                action, _ = agent.predict(obs, deterministic=True)
+                observation, reward, done, result_sting, info = environment.step(action)
+                obs = observation
+                fake_info = {"TimeLimit.truncated": False}
+                agent.replay_buffer.add(obs, observation, action, reward, done, [fake_info])
+
+                # Periodically re-train the agent
+                if (step % (60 * 24 // time_interval)) == 0 and (step !=0):  # Train daily
+                    print("Continuously training the agent during testing phase...")
+                    agent.train(gradient_steps=1, batch_size=64)
+            except KeyboardInterrupt:
+                raise
 
 
 if __name__ == "__main__":
-    test = Rl_test()
-    test.test_gym_with_RL()
+    RL = Rl_test()
+    import time
+    start = time.time()
+    RL.train_gym_with_RL()
+    end = time.time()
+    training_time=end - start
+    print("Training_time is: ", training_time)
+    print("Now testing is started.")
+    start = time.time()
+    RL.test_with_general_RL()
+    end = time.time()
+    test_time = end - start
+    print("Testing_time is: ", test_time)
+    start = time.time()
+    RL.test_with_continuous_RL()
+    end = time.time()
+    test_time = end - start
+    print("Testing_time is: ", test_time)
+    print("Now the testing is completed.")

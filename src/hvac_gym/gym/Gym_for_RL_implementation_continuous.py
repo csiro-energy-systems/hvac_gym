@@ -45,32 +45,35 @@ class HVACGym(Env[DataFrame, DataFrame]):
     ) -> None:
         self.site_config = site_config
         self.reward_function = reward_function
-        setpoints = site_config.setpoints
         self.amount_of_observations = amount_of_observations
+        self.sim_start_date = sim_start_date  # Store initial sim_start_date
 
+        # Load site configuration and models
+        setpoints = site_config.setpoints
         site = site_config.site
         out_dir = site_config.out_dir
-
         self.models: dict[HVACModelConf, RegressorMixin] = {}
-        # load models from disk
         for model_conf in site_config.ahu_models:
             with open(f"{out_dir}/{site}_{model_conf.output}_model.pkl", "rb") as f:
                 self.models[model_conf] = pickle.load(f)
 
-        # read the simulation dataset
+        # Load simulation data
         self.sim_df = pd.read_parquet(f"{out_dir}/{site}_sim_df.parquet")
 
-        # find first index >= sim_start_data, or 0 if not specified
-        self.sim_start_date = pd.to_datetime(sim_start_date) if sim_start_date else self.sim_df.index[0]
-        self.start_index = self.sim_df.index.searchsorted(self.sim_start_date, side="left")
+        # Initialize start index
+        self.update_start_date(self.sim_start_date)
 
-        # make copies of the sim_df, so we can plot the actuals for comparison
+        # Copy simulation data for comparison
         self.actuals_df = self.sim_df.copy()
 
+        # Collect input features
         inputs = [model_conf.inputs for model_conf in site_config.ahu_models]
         self.all_inputs = list(pd.unique([item for sublist in inputs for item in sublist]))
 
         self.setpoints = site_config.setpoints
+
+
+
 
         """ Initialise properties required by the gym environment: """
 
@@ -85,16 +88,40 @@ class HVACGym(Env[DataFrame, DataFrame]):
 
         self.reset()
 
-    @overrides
-    def reset(self, *, seed: Optional[int] = None, return_info: bool = False, options: Optional[dict] = None, new_parameter: bool = False):
-        #     def reset(
-        #     self,
-        #     *,
-        #     seed: int | None = None,
-        #     options: dict[str, Any] | None = None,
-        #     new_parameter: bool = False
-        # ) -> tuple[ObsType, dict[str, Any]]:
+    def update_start_date(self, sim_start_date: datetime | None) -> None:
+        # Ensure sim_df index is datetime
+        self.sim_df.index = pd.to_datetime(self.sim_df.index)
 
+        # Validate sim_start_date
+        if sim_start_date is not None:
+            sim_start_date = pd.to_datetime(sim_start_date)
+            if sim_start_date < self.sim_df.index[0]:
+                print(
+                    f"Warning: sim_start_date {sim_start_date} is before the available data. Adjusting to {self.sim_df.index[0]}.")
+                sim_start_date = self.sim_df.index[0]
+            elif sim_start_date > self.sim_df.index[-1]:
+                print(
+                    f"Warning: sim_start_date {sim_start_date} is after the available data. Adjusting to {self.sim_df.index[-1]}.")
+                sim_start_date = self.sim_df.index[-1]
+
+            self.sim_start_date = sim_start_date
+        else:
+            self.sim_start_date = self.sim_df.index[0]
+
+        # Calculate start index
+        self.start_index = self.sim_df.index.searchsorted(self.sim_start_date, side="left")
+        print(f"Updated simulation start date to: {self.sim_start_date}, start index: {self.start_index}")
+
+    @overrides
+    def reset(
+            self,
+            *,
+            seed: Optional[int] = None,
+            return_info: bool = False,
+            options: Optional[dict] = None,
+            new_parameter: bool = False,
+            sim_start_date: datetime | None = None
+    ) -> tuple[np.ndarray, int]:
         global reset_para
         global thermal_discomfort_kpi
         global energy_usage_kpi
@@ -104,12 +131,15 @@ class HVACGym(Env[DataFrame, DataFrame]):
         global real_energy_usage_kpi
         global real_cost_kpi
 
-        if (reset_para == 0) or (new_parameter == True):
+        if new_parameter and sim_start_date is not None:
+            self.update_start_date(sim_start_date)  # Update sim_start_date and start_index
+
+        if (reset_para == 0) or new_parameter:
             self.index = self.start_index
             initial_observation = np.zeros(self.amount_of_observations)
-            self.state = initial_observation  # Box(low=-1000, high=10000, shape=(len(self.all_inputs),))
+            self.state = initial_observation
             reset_para = 1
-            thermal_discomfort_kpi, energy_usage_kpi, cost_kpi = 0,0,0
+            thermal_discomfort_kpi, energy_usage_kpi, cost_kpi = 0, 0, 0
             real_thermal_discomfort_kpi, real_energy_usage_kpi, real_cost_kpi = 0, 0, 0
             return np.array(initial_observation), 0
         else:
@@ -298,7 +328,7 @@ class HVACGym(Env[DataFrame, DataFrame]):
         if initial == 0:
             now = datetime.now()
             current_time = now.strftime("%dth-%b-%H-%M")
-            result_learning = "C:\\Users\\wan397\\OneDrive - CSIRO\\Desktop\\RL_WORK_SUMMARY\\CSIRO_Newcastle_gym_process_data_" + current_time + "_.csv"
+            result_learning = "C:\\Users\\wan397\\OneDrive - CSIRO\\Desktop\\RL_WORK_SUMMARY\\CSIRO_Newcastle_gym_process_data_" + current_time + "_continuous.csv"
             f_1 = open(result_learning, "w+")
             record = "indoor_temp,real_indoor, boundary_0,boundary_1,reward,thermal_reward,energy_reward,ref,weight_T,outdoor air,ahu_chw_valve_sp,hour,cooling_usage,real_cooling_usage,price,real_thermal_kpi,real_energy_kpi,real_cost_kpi,thermal_kpi,energy_kpi,cost_kpi,scenario\n"
             f_1.write(record)
