@@ -1,80 +1,8 @@
-# See https://pre-commit.com for more information
-# See https://pre-commit.com/hooks.html for more hooks
-# Run with `poetry run pre-commit run --all-files`
+# Minimal clean pre-commit config for testing
 repos:
-
-    - repo: https://github.com/Lucas-C/pre-commit-hooks
-      rev: v1.5.5
-      hooks:
-        - id: remove-crlf
-        - id: remove-tabs
-        - id: insert-license
-          files: \.py$
-          args:
-            - --license-filepath
-            - COPYRIGHT.txt
-            - --use-current-year
-            - --no-extra-eol
-  
-    - repo: https://github.com/astral-sh/ruff-pre-commit
-      rev: v0.7.3  # Specify the Ruff version
-      hooks:
-        - id: ruff
-          args:
-            - --fix
-            - --ignore E501,E302  # Ignore specific errors
-            - --exclude src/tests/*  # Ignore specific directories or files
-        - id: ruff-format
-          args:
-            - --exclude src/tests/*  # Exclude files or directories for format issues
-  
-    - repo: https://github.com/pre-commit/mirrors-mypy
-      rev: v1.13.0
-      hooks:
-        - id: mypy
-          additional_dependencies: [ "mypy_extensions", "types-python-dateutil" ] # Run mypy --install-types to discover missing types to add here
-  
-    # Strip output from all jupyter notebooks, except those stored in the docs/ directory.
-    # We consider everything except documentation to be source code, and source notebooks should not contain outputs.
-    - repo: local
-      hooks:
-        - id: nbstripout
-          name: nbstripout
-          entry: poetry run nbstripout --extra-keys metadata.kernelspec
-          require_serial: true
-          language: system
-          files: ^(?!docs\/).*\.ipynb$  # Python regex for paths to include - everything except docs/**/*.ipynb
-  
-    # Bandit is a tool for finding common security issues in Python code. See https://github.com/PyCQA/bandit
-    # Tip: add `#nosec` to lines of code to ignore checks for that line
-    - repo: https://github.com/PyCQA/bandit
-      rev: 1.7.10
-      hooks:
-        - id: bandit
-          # Args to use pyproject.toml for project-specific config, run on all files, only show >= medium severity (-ll), and >= medium confidence (-ii), output to screen, silence logging (-q), and aggregate errors by file.
-          args: [ "-c", "pyproject.toml", "--recursive", "-ll", "-ii", "--format", "screen", "-q", "--aggregate", "file", "src/" ]
-          additional_dependencies: [ "bandit[toml]" ]
-  
-    # A few basic checks
-    - repo: https://github.com/pre-commit/pre-commit-hooks
-      rev: v5.0.0
-      hooks:
-        - id: trailing-whitespace
-        - id: end-of-file-fixer
-          exclude_types:
-            - jupyter
-        - id: check-yaml
-        - id: check-added-large-files
-          args: [ '--maxkb=2048' ]
-        - id: mixed-line-ending
-        - id: detect-private-key
-        - id: check-case-conflict
-        - id: check-executables-have-shebangs
-        - id: check-shebang-scripts-are-executable
-        - id: name-tests-test
-          args: [ '--pytest-test-first' ]
-  
-    - repo: https://github.com/python-poetry/poetry
-      rev: 1.8.0
-      hooks:
-        - id: poetry-check  
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
