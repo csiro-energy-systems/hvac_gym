@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-# The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2024.
-
-=======
->>>>>>> temp-branch
 import os
 import webbrowser
 from io import StringIO
@@ -19,11 +14,7 @@ def df_to_html(
     file_name: str | None = None,
     show: bool = False,
     precision: int = 2,
-<<<<<<< HEAD
-    **kwargs: dict[Any, Any],
-=======
     **kwargs: Any,
->>>>>>> temp-branch
 ) -> Optional[str]:
     """
     Saves a Pandas DataFrame to an HTML file, optionally showing it in the browser
@@ -36,9 +27,6 @@ def df_to_html(
     :return: the HTML string, or None if saved to file.
     """
     if len(kwargs) == 0:
-<<<<<<< HEAD
-        kwargs.update({"layout": "fit_data", "selectable": "checkbox", "header_filters": True})  # type: ignore
-=======
         kwargs = {}
         kwargs["layout"] = "fit_data"
         kwargs["selectable"] = "checkbox"
@@ -48,7 +36,6 @@ def df_to_html(
         # kwargs['maxHeight'] = '400px'
         # kwargs['pagination'] = 'local'
         # kwargs['page_size'] = 3
->>>>>>> temp-branch
 
     save_df = save_df.copy().round(precision)
     with pd.option_context("display.precision", precision):

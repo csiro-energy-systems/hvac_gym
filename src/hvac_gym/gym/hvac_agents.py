@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-# The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2024.
-
-=======
->>>>>>> temp-branch
 from abc import ABC, abstractmethod
 
 from dch.paths.sem_paths import (
@@ -36,7 +31,8 @@ class MinMaxCoolAgent(HVACAgent):
 
     def __init__(self, env: Env[DataFrame, DataFrame], cycle_steps: int = 2, cool_chwv_setpoint: float = 100) -> None:
         """Initializes the agent with the given environment and cycle steps."""
-        super().__init__(env, f"Alternate Min-Max Cooling every {cycle_steps} steps")
+        super().__init__(
+            env, f"Alternate Min-Max Cooling every {cycle_steps} steps")
         self.cycle_steps = cycle_steps
         self.cool_chwv_setpoint = cool_chwv_setpoint
         self.df_schema = DataFrame(
@@ -44,11 +40,7 @@ class MinMaxCoolAgent(HVACAgent):
                 str(ahu_chw_valve_sp): 0,
                 str(ahu_hw_valve_sp): 0,
                 str(ahu_oa_damper): 0,
-<<<<<<< HEAD
-                str(ahu_sa_fan_speed): 50,
-=======
                 str(ahu_sa_fan_speed): 0,
->>>>>>> temp-branch
             },
             index=[0],
         )
@@ -58,17 +50,41 @@ class MinMaxCoolAgent(HVACAgent):
         """Returns the action for the given observation and step."""
         if step % self.cycle_steps < self.cycle_steps / 2:
             # max cooling
-<<<<<<< HEAD
-            self.df_schema[str(ahu_chw_valve_sp)] = 0
-            return self.df_schema
-        else:
-            # no cooling
-            self.df_schema[str(ahu_chw_valve_sp)] = self.cool_chwv_setpoint
-=======
             self.df_schema[str(ahu_chw_valve_sp)] = self.cool_chwv_setpoint
             return self.df_schema
         else:
             # no cooling
             self.df_schema[str(ahu_chw_valve_sp)] = 0
->>>>>>> temp-branch
+            return self.df_schema
+
+
+class MinMaxHotAgent(HVACAgent):
+    """Agent that just cycles between heating and cooling every timestep."""
+
+    def __init__(self, env: Env[DataFrame, DataFrame], cycle_steps: int = 2, hot_hwv_setpoint: float = 100) -> None:
+        """Initializes the agent with the given environment and cycle steps."""
+        super().__init__(
+            env, f"Alternate Min-Max Cooling every {cycle_steps} steps")
+        self.cycle_steps = cycle_steps
+        self.hot_hwv_setpoint = hot_hwv_setpoint
+        self.df_schema = DataFrame(
+            {
+                str(ahu_chw_valve_sp): 0,
+                str(ahu_hw_valve_sp): 0,
+                str(ahu_oa_damper): 0,
+                str(ahu_sa_fan_speed): 0,
+            },
+            index=[0],
+        )
+
+    @overrides
+    def act(self, observations: ObsType, step: int) -> DataFrame:
+        """Returns the action for the given observation and step."""
+        if step % self.cycle_steps < self.cycle_steps / 2:
+            # max heating
+            self.df_schema[str(ahu_hw_valve_sp)] = self.hot_hwv_setpoint
+            return self.df_schema
+        else:
+            # no heating
+            self.df_schema[str(ahu_hw_valve_sp)] = 0
             return self.df_schema
