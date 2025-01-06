@@ -9,6 +9,7 @@ log.*txt*
 *.coverage
 docs/build
 docs/source/_static
+.DS_Store
 
 # --- Standard Python .gitignore from here onwards, sourced from the .gitignore bible: https://github.com/github/gitignore
 
