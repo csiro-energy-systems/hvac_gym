@@ -11,10 +11,8 @@ Path("output").mkdir(exist_ok=True)
 class TestConfig:
     def test_model_conf_serialisation(self) -> None:
         m = clayton_config.zone_temp_model
-        Path("output/zone_temp_model.json").write_text(
-            m.model_dump_json(indent=4, round_trip=True))
-        loaded_conf = HVACModelConf.model_validate_json(
-            Path("output/zone_temp_model.json").read_text())
+        Path("output/zone_temp_model.json").write_text(m.model_dump_json(indent=4, round_trip=True))
+        loaded_conf = HVACModelConf.model_validate_json(Path("output/zone_temp_model.json").read_text())
 
         assert m == loaded_conf, "Round-tripped model should match original model"
 

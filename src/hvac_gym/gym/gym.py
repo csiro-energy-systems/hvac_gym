@@ -2,8 +2,8 @@ import pickle
 from datetime import datetime, timedelta
 from typing import Any, Callable, SupportsFloat
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 from gymnasium import Env
 from gymnasium.core import ObsType
@@ -144,8 +144,8 @@ class HVACGym(Env[DataFrame, DataFrame]):
 
             # Run the prediction and update the building_df with result
             prediction = model.predict(predict_df)
-            
-            # FIXME Tried to add a clipper to the power models' pipelines, but couldn't.  
+
+            # FIXME Tried to add a clipper to the power models' pipelines, but couldn't.
             prediction = np.clip(prediction, a_min=0, a_max=None)
             sim_df.loc[predict_time, str(output)] = prediction
 

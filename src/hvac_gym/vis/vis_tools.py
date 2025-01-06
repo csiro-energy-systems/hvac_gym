@@ -14,7 +14,7 @@ def df_to_html(
     file_name: str | None = None,
     show: bool = False,
     precision: int = 2,
-    **kwargs: Any,
+    **kwargs: Any,  # noqa: ANN401
 ) -> Optional[str]:
     """
     Saves a Pandas DataFrame to an HTML file, optionally showing it in the browser
