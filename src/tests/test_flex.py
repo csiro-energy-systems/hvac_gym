@@ -1,4 +1,4 @@
-# The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2024.
+# The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2025.
 from math import nan
 from typing import Any
 
@@ -98,8 +98,7 @@ class TestFlex:
         obs_df = pd.concat(obs, axis=1).T
         return obs_df
 
-    @pytest.mark.manual("Long run, manual launch only")
-    @pytest.mark.integration
+    @pytest.mark.integration("Long run, manual launch only")
     def test_gym_flex(self) -> None:
         """Measures flexibility"""
         max_steps = 24 * 6

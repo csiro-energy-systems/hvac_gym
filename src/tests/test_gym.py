@@ -1,4 +1,4 @@
-# The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2024.
+# The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2025.
 
 from pathlib import Path
 from pprint import pprint
@@ -101,7 +101,7 @@ class TestGym:
 
         env = HVACGym(site_config, reward_function=example_reward_func, sim_start_date=start)
         agent = MinMaxCoolAgent(env, cycle_steps=6 * valve_on_off_hours, cool_chwv_setpoint=chwv_sp)
-        obs, rewards = run_gym_with_agent(env, agent, site_config, max_steps=max_steps, show_plot=False)
+        obs, rewards = run_gym_with_agent(env, agent, site_config, max_steps=max_steps, show_plot=True)
         obs_df = pd.concat(obs, axis=1).T
         obs_df["reward"] = rewards
 

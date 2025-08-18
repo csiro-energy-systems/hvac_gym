@@ -1,4 +1,4 @@
-# The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2024.
+# The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2025.
 
 from datetime import datetime
 
@@ -10,7 +10,7 @@ from hvac_gym.training.train_site import TrainSite
 
 
 class TestTrainSite:
-    @pytest.mark.integration
+    @pytest.mark.integration("Requires DCH access")
     def test_train_site(self) -> None:
         """Minimal training run.  Requires DCH access to run."""
         start_date = datetime(2024, 7, 1)

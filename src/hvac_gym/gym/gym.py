@@ -1,4 +1,4 @@
-# The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2024.
+# The Software is copyright (c) Commonwealth Scientific and Industrial Research Organisation (CSIRO) 2023-2025.
 
 import pickle
 from datetime import datetime, timedelta
@@ -273,7 +273,7 @@ def run_gym_with_agent(
     """ Always save the final plot to static html for reference """
     final_figs = env.render()
     title = f"Simulation results for {site_config.site}"
-    figs_to_html(final_figs, f"output/{title}", show=show_plot)
+    figs_to_html(final_figs, f"output/{title}", verbose=1, show=show_plot)
 
     env.close()
     return observations, rewards
